@@ -141,13 +141,42 @@ public class UserService {
                 return ResponseEntity.notFound().build();
             }
 
-            // Update only allowed fields
+            // Check if new email is already in use by another user
+            QuerySnapshot emailCheck = firestore.collection("users")
+                .whereEqualTo("email", user.getEmail())
+                .get()
+                .get();
+
+            boolean emailInUseByOtherUser = emailCheck.getDocuments().stream()
+                .anyMatch(doc -> !doc.getId().equals(userId));
+
+            if (emailInUseByOtherUser) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Email is already in use by another user");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Update allowed fields
             existingUser.setFirstName(user.getFirstName());
             existingUser.setLastName(user.getLastName());
-            existingUser.setLocation(user.getLocation());
+            existingUser.setEmail(user.getEmail());
 
+            // Update Firestore
             firestore.collection("users").document(userId).set(existingUser).get();
-            return ResponseEntity.ok().build();
+
+            // Update Firebase Auth
+            try {
+                UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
+                    .setEmail(user.getEmail());
+                firebaseAuth.updateUser(request);
+            } catch (FirebaseAuthException e) {
+                System.err.println("Warning: Could not update Firebase Auth: " + e.getMessage());
+                // Don't throw exception here, as Firestore update was successful
+            }
+
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Profile updated successfully");
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
