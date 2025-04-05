@@ -3,6 +3,8 @@ package com.capstone.GrabTrash.model;
 import java.util.Date;
 import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.annotation.PropertyName;
+import java.util.List;
+import java.util.ArrayList;
 
 public class User {
     private String userId;
@@ -15,9 +17,13 @@ public class User {
     private Timestamp createdAt;  // Using com.google.cloud.Timestamp
     private String location;
     private UserPreferences preferences;
+    private List<SecurityQuestionAnswer> securityQuestions;
+    private String phoneNumber;
 
     // Default constructor
-    public User() {}
+    public User() {
+        this.securityQuestions = new ArrayList<>();
+    }
 
     // Explicit PropertyName annotations to ensure correct field mapping
     @PropertyName("userId")
@@ -118,6 +124,26 @@ public class User {
     @PropertyName("preferences")
     public void setPreferences(UserPreferences preferences) {
         this.preferences = preferences;
+    }
+    
+    @PropertyName("securityQuestions")
+    public List<SecurityQuestionAnswer> getSecurityQuestions() {
+        return securityQuestions;
+    }
+
+    @PropertyName("securityQuestions")
+    public void setSecurityQuestions(List<SecurityQuestionAnswer> securityQuestions) {
+        this.securityQuestions = securityQuestions;
+    }
+
+    @PropertyName("phoneNumber")
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    @PropertyName("phoneNumber")
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 
     @Override

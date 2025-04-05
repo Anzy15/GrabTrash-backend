@@ -6,6 +6,9 @@ import org.springframework.web.bind.annotation.*;
 
 import com.capstone.GrabTrash.model.User;
 import com.capstone.GrabTrash.dto.PasswordUpdateRequest;
+import com.capstone.GrabTrash.dto.ForgotPasswordRequest;
+import com.capstone.GrabTrash.dto.SecurityQuestionRequest;
+import com.capstone.GrabTrash.dto.RegisterRequest;
 import com.capstone.GrabTrash.service.UserService;
 
 import java.util.HashMap;
@@ -23,8 +26,8 @@ public class UserController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@RequestBody User user) {
-        return userService.registerUser(user);
+    public ResponseEntity<?> registerUser(@RequestBody RegisterRequest request) {
+        return userService.registerUser(request);
     }
 
     @PostMapping("/login")
@@ -45,6 +48,21 @@ public class UserController {
     @PutMapping("/profile/{userId}/password")
     public ResponseEntity<?> updatePassword(@PathVariable String userId, @RequestBody PasswordUpdateRequest request) {
         return userService.updatePassword(userId, request);
+    }
+
+    @GetMapping("/security-questions")
+    public ResponseEntity<?> getSecurityQuestions() {
+        return userService.getSecurityQuestions();
+    }
+
+    @PostMapping("/forgot-password/question")
+    public ResponseEntity<?> getSecurityQuestion(@RequestBody SecurityQuestionRequest request) {
+        return userService.getSecurityQuestions(request);
+    }
+
+    @PostMapping("/forgot-password/reset")
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+        return userService.forgotPassword(request);
     }
 
     @PutMapping("/profile/{userId}/email")

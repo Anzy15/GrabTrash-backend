@@ -2,14 +2,20 @@ package com.capstone.GrabTrash.service;
 
 import com.capstone.GrabTrash.model.*;
 import com.capstone.GrabTrash.dto.PasswordUpdateRequest;
+import com.capstone.GrabTrash.dto.ForgotPasswordRequest;
+import com.capstone.GrabTrash.dto.SecurityQuestionRequest;
+import com.capstone.GrabTrash.dto.RegisterRequest;
+import com.capstone.GrabTrash.dto.SecurityQuestionsList;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
+import com.google.cloud.Timestamp;
 import com.google.firebase.auth.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.http.ResponseEntity;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,11 +39,14 @@ public class UserService {
     }
     
    
-    public ResponseEntity<?> registerUser(User user) {
+    /**
+     * Register a new user
+     */
+    public ResponseEntity<?> registerUser(RegisterRequest request) {
         try {
             // Check if user already exists
             Query query = firestore.collection("users")
-                .whereEqualTo("email", user.getEmail());
+                .whereEqualTo("email", request.getEmail());
             QuerySnapshot querySnapshot = query.get().get();
 
             if (!querySnapshot.isEmpty()) {
@@ -46,8 +55,45 @@ public class UserService {
                 return ResponseEntity.badRequest().body(error);
             }
 
-            // Hash password
-            user.setPassword(passwordEncoder.encode(user.getPassword()));
+            // Validate security questions
+            if (request.getSecurityQuestions() == null || request.getSecurityQuestions().isEmpty()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "At least one security question is required");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            if (request.getSecurityQuestions().size() > 3) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Maximum of 3 security questions allowed");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            List<SecurityQuestionAnswer> securityQuestions = new ArrayList<>();
+            for (SecurityQuestionRequest sqRequest : request.getSecurityQuestions()) {
+                SecurityQuestion securityQuestion = SecurityQuestion.valueOf(sqRequest.getQuestionId());
+                if (securityQuestion == null) {
+                    Map<String, String> error = new HashMap<>();
+                    error.put("error", "Invalid security question: " + sqRequest.getQuestionId());
+                    return ResponseEntity.badRequest().body(error);
+                }
+                securityQuestions.add(new SecurityQuestionAnswer(
+                    sqRequest.getQuestionId(),
+                    securityQuestion.getQuestionText(),
+                    sqRequest.getAnswer()
+                ));
+            }
+
+            // Create new user
+            User user = new User();
+            user.setEmail(request.getEmail());
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+            user.setUsername(request.getUsername());
+            user.setFirstName(request.getFirstName());
+            user.setLastName(request.getLastName());
+            user.setSecurityQuestions(securityQuestions);
+            user.setRole(request.getRole() != null ? request.getRole() : "USER");
+            user.setPhoneNumber(request.getPhoneNumber());
+            user.setCreatedAt(Timestamp.now());
 
             // Save user to Firestore
             String userId = firestore.collection("users").document().getId();
@@ -126,6 +172,7 @@ public class UserService {
             profile.put("location", user.getLocation());
             profile.put("preferences", user.getPreferences());
             profile.put("createdAt", user.getCreatedAt());
+            profile.put("phoneNumber", user.getPhoneNumber());
 
             return ResponseEntity.ok(profile);
         } catch (Exception e) {
@@ -419,5 +466,83 @@ public class UserService {
         Map<String, Object> updates = new HashMap<>();
         updates.put("preferences", preferences);
         firestore.collection("users").document(userId).update(updates).get();
+    }
+
+    /**
+     * Get all available security questions
+     */
+    public ResponseEntity<?> getSecurityQuestions() {
+        try {
+            SecurityQuestionsList questionsList = new SecurityQuestionsList();
+            return ResponseEntity.ok(questionsList);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Get the security questions for a user
+     */
+    public ResponseEntity<?> getSecurityQuestions(SecurityQuestionRequest request) {
+        try {
+            User user = getUserByEmailOrUsername(request.getIdentifier());
+            if (user == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("securityQuestions", user.getSecurityQuestions());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Reset password using security questions
+     */
+    public ResponseEntity<?> forgotPassword(ForgotPasswordRequest request) {
+        try {
+            User user = getUserByEmailOrUsername(request.getIdentifier());
+            if (user == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Verify at least one security answer is correct
+            boolean anyAnswerCorrect = false;
+            for (SecurityQuestionAnswer sqa : user.getSecurityQuestions()) {
+                if (sqa.getQuestionId().equals(request.getQuestionId()) && 
+                    sqa.getAnswer().equalsIgnoreCase(request.getSecurityAnswer())) {
+                    anyAnswerCorrect = true;
+                    break;
+                }
+            }
+
+            if (!anyAnswerCorrect) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Incorrect security answer");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Update password
+            user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            firestore.collection("users").document(user.getUserId()).set(user).get();
+
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Password reset successfully");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
     }
 }
