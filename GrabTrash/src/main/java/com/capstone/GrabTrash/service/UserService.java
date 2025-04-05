@@ -1,6 +1,7 @@
 package com.capstone.GrabTrash.service;
 
 import com.capstone.GrabTrash.model.*;
+import com.capstone.GrabTrash.dto.PasswordUpdateRequest;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import com.google.firebase.auth.*;
@@ -184,7 +185,7 @@ public class UserService {
         }
     }
 
-    public ResponseEntity<?> updatePassword(String userId, User user) {
+    public ResponseEntity<?> updatePassword(String userId, PasswordUpdateRequest request) {
         try {
             User existingUser = firestore.collection("users").document(userId).get().get().toObject(User.class);
             if (existingUser == null) {
@@ -192,14 +193,14 @@ public class UserService {
             }
 
             // Verify old password
-            if (!passwordEncoder.matches(user.getOldPassword(), existingUser.getPassword())) {
+            if (!passwordEncoder.matches(request.getOldPassword(), existingUser.getPassword())) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Invalid old password");
                 return ResponseEntity.badRequest().body(error);
             }
 
             // Update password
-            existingUser.setPassword(passwordEncoder.encode(user.getNewPassword()));
+            existingUser.setPassword(passwordEncoder.encode(request.getNewPassword()));
             firestore.collection("users").document(userId).set(existingUser).get();
 
             Map<String, String> response = new HashMap<>();

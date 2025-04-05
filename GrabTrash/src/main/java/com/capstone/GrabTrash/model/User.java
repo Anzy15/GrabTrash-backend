@@ -11,8 +11,6 @@ public class User {
     private String lastName;
     private String email;
     private String password;
-    private String oldPassword;
-    private String newPassword;
     private String role;
     private Timestamp createdAt;  // Using com.google.cloud.Timestamp
     private String location;
@@ -80,26 +78,6 @@ public class User {
     @PropertyName("password")
     public void setPassword(String password) {
         this.password = password;
-    }
-
-    @PropertyName("oldPassword")
-    public String getOldPassword() {
-        return oldPassword;
-    }
-
-    @PropertyName("oldPassword")
-    public void setOldPassword(String oldPassword) {
-        this.oldPassword = oldPassword;
-    }
-
-    @PropertyName("newPassword")
-    public String getNewPassword() {
-        return newPassword;
-    }
-
-    @PropertyName("newPassword")
-    public void setNewPassword(String newPassword) {
-        this.newPassword = newPassword;
     }
 
     @PropertyName("role")

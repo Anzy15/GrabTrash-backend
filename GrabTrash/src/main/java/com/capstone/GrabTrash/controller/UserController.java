@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.capstone.GrabTrash.model.User;
+import com.capstone.GrabTrash.dto.PasswordUpdateRequest;
 import com.capstone.GrabTrash.service.UserService;
 
 import java.util.HashMap;
@@ -42,8 +43,8 @@ public class UserController {
     }
 
     @PutMapping("/profile/{userId}/password")
-    public ResponseEntity<?> updatePassword(@PathVariable String userId, @RequestBody User user) {
-        return userService.updatePassword(userId, user);
+    public ResponseEntity<?> updatePassword(@PathVariable String userId, @RequestBody PasswordUpdateRequest request) {
+        return userService.updatePassword(userId, request);
     }
 
     @PutMapping("/profile/{userId}/email")
