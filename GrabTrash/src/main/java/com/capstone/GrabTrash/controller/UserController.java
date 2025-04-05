@@ -83,4 +83,9 @@ public class UserController {
     public ResponseEntity<?> getCollectionStats(@PathVariable String userId) {
         return userService.getCollectionStats(userId);
     }
+
+    @GetMapping("/profile/security-questions")
+    public ResponseEntity<?> getUserSecurityQuestions() {
+        return userService.getUserSecurityQuestions();
+    }
 }

@@ -14,6 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.http.HttpStatus;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -488,6 +491,38 @@ public class UserService {
     public ResponseEntity<?> getSecurityQuestions(SecurityQuestionRequest request) {
         try {
             User user = getUserByEmailOrUsername(request.getIdentifier());
+            if (user == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("securityQuestions", user.getSecurityQuestions());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Get the logged-in user's security questions and answers
+     */
+    public ResponseEntity<?> getUserSecurityQuestions() {
+        try {
+            // Get the current authenticated user from SecurityContext
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            String userEmail = authentication.getName();
+            User user = getUserByEmailOrUsername(userEmail);
+            
             if (user == null) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "User not found");
