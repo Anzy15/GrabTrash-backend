@@ -516,20 +516,31 @@ public class UserService {
                 return ResponseEntity.badRequest().body(error);
             }
 
-            // Verify at least one security answer is correct
-            boolean anyAnswerCorrect = false;
-            for (SecurityQuestionAnswer sqa : user.getSecurityQuestions()) {
-                if (sqa.getQuestionId().equals(request.getQuestionId()) && 
-                    sqa.getAnswer().equalsIgnoreCase(request.getSecurityAnswer())) {
-                    anyAnswerCorrect = true;
-                    break;
-                }
+            // Verify all security answers are correct
+            List<SecurityQuestionAnswer> userQuestions = user.getSecurityQuestions();
+            List<SecurityQuestionRequest> providedAnswers = request.getAnswers();
+
+            // Check if number of answers matches number of questions
+            if (userQuestions.size() != providedAnswers.size()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Please answer all security questions");
+                return ResponseEntity.badRequest().body(error);
             }
 
-            if (!anyAnswerCorrect) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "Incorrect security answer");
-                return ResponseEntity.badRequest().body(error);
+            // Create a map of question IDs to answers for easier lookup
+            Map<String, String> userAnswersMap = new HashMap<>();
+            for (SecurityQuestionAnswer sqa : userQuestions) {
+                userAnswersMap.put(sqa.getQuestionId(), sqa.getAnswer());
+            }
+
+            // Verify each answer
+            for (SecurityQuestionRequest answer : providedAnswers) {
+                String correctAnswer = userAnswersMap.get(answer.getQuestionId());
+                if (correctAnswer == null || !correctAnswer.equalsIgnoreCase(answer.getAnswer())) {
+                    Map<String, String> error = new HashMap<>();
+                    error.put("error", "One or more security answers are incorrect");
+                    return ResponseEntity.badRequest().body(error);
+                }
             }
 
             // Update password

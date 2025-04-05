@@ -1,26 +1,23 @@
 package com.capstone.GrabTrash.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
 
 public class ForgotPasswordRequest {
     @JsonProperty("identifier")
     private String identifier; // Can be email or username
-    
-    @JsonProperty("questionId")
-    private String questionId;
-    
-    @JsonProperty("securityAnswer")
-    private String securityAnswer;
-    
+
+    @JsonProperty("answers")
+    private List<SecurityQuestionRequest> answers;
+
     @JsonProperty("newPassword")
     private String newPassword;
 
     public ForgotPasswordRequest() {}
 
-    public ForgotPasswordRequest(String identifier, String questionId, String securityAnswer, String newPassword) {
+    public ForgotPasswordRequest(String identifier, List<SecurityQuestionRequest> answers, String newPassword) {
         this.identifier = identifier;
-        this.questionId = questionId;
-        this.securityAnswer = securityAnswer;
+        this.answers = answers;
         this.newPassword = newPassword;
     }
 
@@ -32,20 +29,12 @@ public class ForgotPasswordRequest {
         this.identifier = identifier;
     }
 
-    public String getQuestionId() {
-        return questionId;
+    public List<SecurityQuestionRequest> getAnswers() {
+        return answers;
     }
 
-    public void setQuestionId(String questionId) {
-        this.questionId = questionId;
-    }
-
-    public String getSecurityAnswer() {
-        return securityAnswer;
-    }
-
-    public void setSecurityAnswer(String securityAnswer) {
-        this.securityAnswer = securityAnswer;
+    public void setAnswers(List<SecurityQuestionRequest> answers) {
+        this.answers = answers;
     }
 
     public String getNewPassword() {
