@@ -88,4 +88,9 @@ public class UserController {
     public ResponseEntity<?> getUserSecurityQuestions() {
         return userService.getUserSecurityQuestions();
     }
+
+    @GetMapping("/all")
+    public ResponseEntity<?> getAllUsers() {
+        return userService.getAllUsers();
+    }
 }
