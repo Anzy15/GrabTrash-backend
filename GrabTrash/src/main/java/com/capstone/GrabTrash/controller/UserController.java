@@ -1,6 +1,7 @@
 package com.capstone.GrabTrash.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -97,5 +98,21 @@ public class UserController {
     @GetMapping("/total-active")
     public ResponseEntity<?> getTotalActiveUsers() {
         return userService.getTotalActiveUsers();
+    }
+
+    @DeleteMapping("/{userId}")
+    public ResponseEntity<?> deleteUser(@PathVariable String userId) {
+        ResponseEntity<?> response = userService.deleteUser(userId);
+        if (response.getStatusCode() == HttpStatus.FORBIDDEN) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Access denied. Only admin users can delete accounts.");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        }
+        return response;
+    }
+
+    @PutMapping("/{userId}/role")
+    public ResponseEntity<?> updateUserRole(@PathVariable String userId, @RequestBody Map<String, String> request) {
+        return userService.updateUserRole(userId, request.get("role"));
     }
 }

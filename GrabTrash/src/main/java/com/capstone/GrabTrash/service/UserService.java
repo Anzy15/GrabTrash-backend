@@ -342,12 +342,6 @@ public class UserService {
         firestore.collection("users").document(userId).update(updates);
     }
 
-    //  Delete User
-    public void deleteUser(String userId) throws FirebaseAuthException {
-        FirebaseAuth.getInstance().deleteUser(userId);
-        firestore.collection("users").document(userId).delete();
-    }
-
     // Update User Profile Information
     public void updateProfileInfo(String userId, String firstName, String lastName, String location) throws ExecutionException, InterruptedException {
         Map<String, Object> updates = new HashMap<>();
@@ -679,6 +673,173 @@ public class UserService {
 
             Map<String, Object> response = new HashMap<>();
             response.put("totalActiveUsers", totalUsers);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Delete a user account (admin only)
+     */
+    public ResponseEntity<?> deleteUser(String userId) {
+        try {
+            // Get the current authenticated user
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            String adminEmail = authentication.getName();
+            User adminUser = getUserByEmailOrUsername(adminEmail);
+            
+            if (adminUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Admin user not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Check if the user is an admin
+            if (!"admin".equalsIgnoreCase(adminUser.getRole())) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Access denied. Admin role required.");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            // Check if the user to be deleted exists
+            DocumentSnapshot userDoc = firestore.collection("users").document(userId).get().get();
+            if (!userDoc.exists()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.notFound().build();
+            }
+
+            // Delete the user from Firebase Auth
+            try {
+                firebaseAuth.deleteUser(userId);
+            } catch (FirebaseAuthException e) {
+                System.err.println("Warning: Could not delete user from Firebase Auth: " + e.getMessage());
+                // Continue with Firestore deletion even if Firebase Auth deletion fails
+            }
+
+            // Delete the user from Firestore
+            firestore.collection("users").document(userId).delete().get();
+
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "User deleted successfully");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Update user role (admin only)
+     */
+    public ResponseEntity<?> updateUserRole(String userId, String newRole) {
+        try {
+            // Get the current authenticated user
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            String adminEmail = authentication.getName();
+            User adminUser = getUserByEmailOrUsername(adminEmail);
+            
+            if (adminUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Admin user not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Check if the user is an admin
+            if (!"admin".equalsIgnoreCase(adminUser.getRole())) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Access denied. Admin role required.");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            // Check if the user to be updated exists
+            DocumentSnapshot userDoc = firestore.collection("users").document(userId).get().get();
+            if (!userDoc.exists()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.notFound().build();
+            }
+
+            // Update the user's role
+            User user = userDoc.toObject(User.class);
+            user.setRole(newRole);
+            firestore.collection("users").document(userId).set(user).get();
+
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "User role updated successfully");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Get total trash picked up (admin only)
+     */
+    public ResponseEntity<?> getTotalTrashPickedUp() {
+        try {
+            // Get the current authenticated user from SecurityContext
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            // Get the current user's email
+            String userEmail = authentication.getName();
+            User currentUser = getUserByEmailOrUsername(userEmail);
+            
+            if (currentUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Check if the user is an admin
+            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Access denied. Admin role required.");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            // Get all completed pickup requests
+            Query query = firestore.collection("pickup_requests")
+                .whereEqualTo("status", "COMPLETED");
+            QuerySnapshot querySnapshot = query.get().get();
+            
+            double totalWeight = 0.0;
+            int totalRequests = 0;
+            
+            for (QueryDocumentSnapshot document : querySnapshot.getDocuments()) {
+                PickupRequest pickupRequest = document.toObject(PickupRequest.class);
+                if (pickupRequest.getTrashWeight() != null) {
+                    totalWeight += pickupRequest.getTrashWeight();
+                }
+                totalRequests++;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("totalTrashPickedUp", totalWeight);
+            response.put("totalCompletedRequests", totalRequests);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();
