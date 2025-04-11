@@ -93,4 +93,9 @@ public class UserController {
     public ResponseEntity<?> getAllUsers() {
         return userService.getAllUsers();
     }
+
+    @GetMapping("/total-active")
+    public ResponseEntity<?> getTotalActiveUsers() {
+        return userService.getTotalActiveUsers();
+    }
 }

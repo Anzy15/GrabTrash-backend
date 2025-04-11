@@ -642,4 +642,48 @@ public class UserService {
             return ResponseEntity.badRequest().body(error);
         }
     }
+
+    /**
+     * Get total number of active users (admin only)
+     */
+    public ResponseEntity<?> getTotalActiveUsers() {
+        try {
+            // Get the current authenticated user from SecurityContext
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            // Get the current user's email
+            String userEmail = authentication.getName();
+            User currentUser = getUserByEmailOrUsername(userEmail);
+            
+            if (currentUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Check if the user is an admin
+            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Access denied. Admin role required.");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            // Get all users from Firestore
+            QuerySnapshot querySnapshot = firestore.collection("users").get().get();
+            long totalUsers = querySnapshot.size();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("totalActiveUsers", totalUsers);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
 }
