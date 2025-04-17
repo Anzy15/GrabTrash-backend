@@ -13,6 +13,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpMethod;
 
 import java.util.Arrays;
 import java.util.List;
@@ -35,8 +36,14 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/users/register", "/api/users/login", "/api/users/security-questions", "/api/users/forgot-password/reset", "/api/users/forgot-password/question").permitAll()
+                .requestMatchers("/api/users/register", "/api/users/login", "/api/users/security-questions", 
+                               "/api/users/forgot-password/reset", "/api/users/forgot-password/question",
+                               "/api/pickup-locations").permitAll()
                 .requestMatchers("/error").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/pickup-locations/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/pickup-locations").authenticated()
+                .requestMatchers(HttpMethod.PUT, "/api/pickup-locations/**").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/api/pickup-locations/**").authenticated()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

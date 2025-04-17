@@ -23,7 +23,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
-    private final List<String> PUBLIC_PATHS = Arrays.asList("/api/users/register", "/api/users/login", "/api/users/security-questions", "/api/users/forgot-password/reset", "/api/users/forgot-password/question");
+    private final List<String> PUBLIC_PATHS = Arrays.asList(
+        "/api/users/register", 
+        "/api/users/login", 
+        "/api/users/security-questions", 
+        "/api/users/forgot-password/reset", 
+        "/api/users/forgot-password/question",
+        "/api/pickup-locations"
+    );
 
     public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
         this.jwtService = jwtService;
