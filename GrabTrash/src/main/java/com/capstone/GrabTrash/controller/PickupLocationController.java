@@ -101,17 +101,34 @@ public class PickupLocationController {
         try {
             // Check for validation errors
             if (bindingResult.hasErrors()) {
-                String errors = bindingResult.getFieldErrors()
-                    .stream()
-                    .map(FieldError::getDefaultMessage)
-                    .collect(Collectors.joining(", "));
+                StringBuilder errorMessage = new StringBuilder("Validation failed: ");
+                for (FieldError error : bindingResult.getFieldErrors()) {
+                    errorMessage.append("\n- ")
+                              .append(error.getField())
+                              .append(": ")
+                              .append(error.getDefaultMessage())
+                              .append(" (Rejected value: ")
+                              .append(error.getRejectedValue())
+                              .append(")");
+                }
+                
+                System.out.println("Request body: " + request); // Debug log
+                System.out.println("Validation errors: " + errorMessage); // Debug log
                 
                 PickupLocationResponse response = new PickupLocationResponse(
                     false,
-                    "Validation failed: " + errors
+                    errorMessage.toString()
                 );
                 return ResponseEntity.badRequest().body(response);
             }
+
+            // Debug log
+            System.out.println("Creating pickup location with data:");
+            System.out.println("Address: " + request.getAddress());
+            System.out.println("Site Name: " + request.getSiteName());
+            System.out.println("Waste Type: " + request.getWasteType());
+            System.out.println("Latitude: " + request.getLatitude());
+            System.out.println("Longitude: " + request.getLongitude());
 
             PickupLocation newLocation = new PickupLocation();
             newLocation.setSiteName(request.getSiteName());
@@ -129,6 +146,7 @@ public class PickupLocationController {
             );
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            e.printStackTrace(); // Debug log
             PickupLocationResponse response = new PickupLocationResponse(
                 false,
                 "Error creating pickup location: " + e.getMessage()

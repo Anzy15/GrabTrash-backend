@@ -2,21 +2,27 @@ package com.capstone.GrabTrash.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class PickupLocationRequest {
     @NotBlank(message = "Site name cannot be blank")
+    @JsonProperty("siteName")
     private String siteName;
     
     @NotBlank(message = "Waste type cannot be blank")
+    @JsonProperty("wasteType")
     private String wasteType;
     
     @NotBlank(message = "Address cannot be blank")
+    @JsonProperty("address")
     private String address;
     
     @NotNull(message = "Latitude cannot be null")
+    @JsonProperty("latitude")
     private Double latitude;
     
     @NotNull(message = "Longitude cannot be null")
+    @JsonProperty("longitude")
     private Double longitude;
 
     // Default constructor
