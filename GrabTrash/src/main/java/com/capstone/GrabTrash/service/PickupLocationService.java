@@ -43,7 +43,7 @@ public class PickupLocationService {
      * @param locationId The ID of the location to retrieve
      * @return The pickup location, or null if not found
      */
-    public PickupLocation getPickupLocationById(String locationId) throws ExecutionException, InterruptedException {
+    public PickupLocation getLocationById(String locationId) throws ExecutionException, InterruptedException {
         DocumentReference docRef = firestore.collection(COLLECTION_NAME).document(locationId);
         DocumentSnapshot document = docRef.get().get();
         
