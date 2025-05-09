@@ -36,7 +36,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/users/register", "/api/users/login", "/api/users/security-questions", 
+                .requestMatchers("/api/users/register", "/api/users/login", "/api/users/security-questions",
                                "/api/users/forgot-password/reset", "/api/users/forgot-password/question",
                                "/api/pickup-locations").permitAll()
                 .requestMatchers("/error").permitAll()
@@ -44,6 +44,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/pickup-locations").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/pickup-locations/**").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/pickup-locations/**").authenticated()
+                // Allow access to payment endpoints
+                .requestMatchers("/api/payments/**").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

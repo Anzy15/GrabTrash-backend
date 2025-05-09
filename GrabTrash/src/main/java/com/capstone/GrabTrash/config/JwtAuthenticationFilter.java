@@ -24,11 +24,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
     private final List<String> PUBLIC_PATHS = Arrays.asList(
-        "/api/users/register", 
-        "/api/users/login", 
-        "/api/users/security-questions", 
-        "/api/users/forgot-password/reset", 
-        "/api/users/forgot-password/question"
+        "/api/users/register",
+        "/api/users/login",
+        "/api/users/security-questions",
+        "/api/users/forgot-password/reset",
+        "/api/users/forgot-password/question",
+        "/api/payments",
+        "/api/payments/"
     );
 
     public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
@@ -45,12 +47,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         String method = request.getMethod();
 
-        // Allow public paths and GET requests to pickup-locations
+        // Allow public paths, GET requests to pickup-locations, and all payment endpoints
         boolean isPublicPath = PUBLIC_PATHS.contains(path);
-        boolean isPublicPickupLocation = "GET".equals(method) && 
+        boolean isPublicPickupLocation = "GET".equals(method) &&
             (path.equals("/api/pickup-locations") || path.startsWith("/api/pickup-locations/"));
+        boolean isPaymentEndpoint = path.startsWith("/api/payments");
 
-        if (isPublicPath || isPublicPickupLocation) {
+        if (isPublicPath || isPublicPickupLocation || isPaymentEndpoint) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -94,4 +97,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
-} 
+}
