@@ -1,5 +1,6 @@
 package com.capstone.GrabTrash.service;
 
+import com.capstone.GrabTrash.dto.DashboardStatsDTO;
 import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
 import com.capstone.GrabTrash.model.Payment;
@@ -166,6 +167,44 @@ public class PaymentService {
         } catch (InterruptedException | ExecutionException e) {
             log.error("Error getting payments by customer email", e);
             throw new RuntimeException("Failed to get payments: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Get dashboard statistics including total pickup trash ordered
+     * @return Dashboard statistics
+     */
+    public DashboardStatsDTO getDashboardStats() {
+        try {
+            CollectionReference paymentsCollection = firestore.collection(COLLECTION_NAME);
+            
+            // Get all completed payments
+            Query query = paymentsCollection.whereEqualTo("status", "COMPLETED");
+            ApiFuture<QuerySnapshot> future = query.get();
+            List<Payment> payments = future.get().toObjects(Payment.class);
+            
+            // Calculate total pickup trash ordered (count of completed orders)
+            int totalPickupTrashOrdered = payments.size();
+            
+            // Calculate total revenue from all completed orders
+            double totalRevenue = payments.stream()
+                    .mapToDouble(Payment::getTotalAmount)
+                    .sum();
+            
+            // Count of completed orders is the same as totalPickupTrashOrdered in this case
+            int totalCompletedOrders = totalPickupTrashOrdered;
+            
+            // Create and return the dashboard stats DTO
+            return DashboardStatsDTO.builder()
+                    .totalPickupTrashOrdered(totalPickupTrashOrdered)
+                    .totalRevenue(totalRevenue)
+                    .totalCompletedOrders(totalCompletedOrders)
+                    .message("Dashboard statistics retrieved successfully")
+                    .build();
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error getting dashboard statistics", e);
+            throw new RuntimeException("Failed to get dashboard statistics: " + e.getMessage());
         }
     }
 

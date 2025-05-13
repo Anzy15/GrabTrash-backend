@@ -28,9 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         "/api/users/login",
         "/api/users/security-questions",
         "/api/users/forgot-password/reset",
-        "/api/users/forgot-password/question",
-        "/api/payments",
-        "/api/payments/"
+        "/api/users/forgot-password/question"
     );
 
     public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
@@ -47,13 +45,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         String method = request.getMethod();
 
-        // Allow public paths, GET requests to pickup-locations, and all payment endpoints
+        // Allow public paths and GET requests to pickup-locations
         boolean isPublicPath = PUBLIC_PATHS.contains(path);
         boolean isPublicPickupLocation = "GET".equals(method) &&
             (path.equals("/api/pickup-locations") || path.startsWith("/api/pickup-locations/"));
-        boolean isPaymentEndpoint = path.startsWith("/api/payments");
 
-        if (isPublicPath || isPublicPickupLocation || isPaymentEndpoint) {
+        if (isPublicPath || isPublicPickupLocation) {
             filterChain.doFilter(request, response);
             return;
         }

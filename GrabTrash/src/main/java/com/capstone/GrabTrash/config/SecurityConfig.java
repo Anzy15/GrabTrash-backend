@@ -44,8 +44,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/pickup-locations").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/pickup-locations/**").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/pickup-locations/**").authenticated()
-                // Allow access to payment endpoints
-                .requestMatchers("/api/payments/**").permitAll()
+                // Require authentication for payment endpoints
+                .requestMatchers("/api/payments/**").authenticated()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session
