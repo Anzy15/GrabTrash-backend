@@ -39,6 +39,16 @@ public class PickupLocationService {
     }
 
     /**
+     * Get the total number of pickup locations
+     * @return The count of pickup locations
+     */
+    public long getTotalPickupLocations() throws ExecutionException, InterruptedException {
+        ApiFuture<QuerySnapshot> future = firestore.collection(COLLECTION_NAME).get();
+        QuerySnapshot querySnapshot = future.get();
+        return querySnapshot.size();
+    }
+
+    /**
      * Get a pickup location by ID
      * @param locationId The ID of the location to retrieve
      * @return The pickup location, or null if not found

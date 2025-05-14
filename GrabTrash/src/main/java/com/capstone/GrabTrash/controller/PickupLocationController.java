@@ -55,6 +55,30 @@ public class PickupLocationController {
     }
 
     /**
+     * Get the total count of pickup locations
+     * This endpoint is publicly accessible (no JWT required)
+     * @return Total number of pickup locations
+     */
+    @GetMapping("/count")
+    public ResponseEntity<PickupLocationResponse> getTotalPickupLocations() {
+        try {
+            long count = pickupLocationService.getTotalPickupLocations();
+            PickupLocationResponse response = new PickupLocationResponse(
+                    count,
+                    true,
+                    "Total pickup locations count retrieved successfully"
+            );
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            PickupLocationResponse response = new PickupLocationResponse(
+                    false,
+                    "Error retrieving pickup locations count: " + e.getMessage()
+            );
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    /**
      * Get a pickup location by ID
      * This endpoint is publicly accessible (no JWT required)
      * @param id The ID of the pickup location to retrieve

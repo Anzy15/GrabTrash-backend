@@ -16,6 +16,7 @@ public class PickupLocationResponse {
     private boolean success;
     private String message;
     private List<PickupLocation> locations;
+    private Long count;
 
     // Default constructor
     public PickupLocationResponse() {}
@@ -62,6 +63,13 @@ public class PickupLocationResponse {
 
     // Error response
     public PickupLocationResponse(boolean success, String message) {
+        this.success = success;
+        this.message = message;
+    }
+    
+    // Count response
+    public PickupLocationResponse(long count, boolean success, String message) {
+        this.count = count;
         this.success = success;
         this.message = message;
     }
@@ -136,5 +144,13 @@ public class PickupLocationResponse {
 
     public void setLocations(List<PickupLocation> locations) {
         this.locations = locations;
+    }
+
+    public Long getCount() {
+        return count;
+    }
+
+    public void setCount(Long count) {
+        this.count = count;
     }
 } 
