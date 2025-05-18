@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Lazy;
 
 import com.capstone.GrabTrash.model.Barangay;
 import com.capstone.GrabTrash.model.User;
@@ -26,8 +27,23 @@ public class BarangayService {
     @Autowired
     private Firestore firestore;
 
+    private final UserService userService;
+
     @Autowired
-    private UserService userService;
+    public BarangayService(@Lazy UserService userService) {
+        this.userService = userService;
+    }
+
+    private boolean isAdminUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+
+        String userEmail = authentication.getName();
+        User currentUser = userService.getUserByEmailOrUsername(userEmail);
+        return currentUser != null && "admin".equalsIgnoreCase(currentUser.getRole());
+    }
 
     private String generateShortId() {
         // Get current timestamp in milliseconds
@@ -50,26 +66,7 @@ public class BarangayService {
 
     public ResponseEntity<?> addBarangay(Barangay barangay) {
         try {
-            // Get the current authenticated user from SecurityContext
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication == null || !authentication.isAuthenticated()) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "User not authenticated");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
-            }
-
-            // Get the current user's email
-            String userEmail = authentication.getName();
-            User currentUser = userService.getUserByEmailOrUsername(userEmail);
-            
-            if (currentUser == null) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "User not found");
-                return ResponseEntity.badRequest().body(error);
-            }
-
-            // Check if the user is an admin
-            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+            if (!isAdminUser()) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Access denied. Admin role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -92,26 +89,7 @@ public class BarangayService {
 
     public ResponseEntity<?> removeBarangay(String barangayId) {
         try {
-            // Get the current authenticated user from SecurityContext
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication == null || !authentication.isAuthenticated()) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "User not authenticated");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
-            }
-
-            // Get the current user's email
-            String userEmail = authentication.getName();
-            User currentUser = userService.getUserByEmailOrUsername(userEmail);
-            
-            if (currentUser == null) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "User not found");
-                return ResponseEntity.badRequest().body(error);
-            }
-
-            // Check if the user is an admin
-            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+            if (!isAdminUser()) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Access denied. Admin role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -177,26 +155,7 @@ public class BarangayService {
 
     public ResponseEntity<?> reactivateBarangay(String barangayId) {
         try {
-            // Get the current authenticated user from SecurityContext
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication == null || !authentication.isAuthenticated()) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "User not authenticated");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
-            }
-
-            // Get the current user's email
-            String userEmail = authentication.getName();
-            User currentUser = userService.getUserByEmailOrUsername(userEmail);
-            
-            if (currentUser == null) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "User not found");
-                return ResponseEntity.badRequest().body(error);
-            }
-
-            // Check if the user is an admin
-            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+            if (!isAdminUser()) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Access denied. Admin role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);

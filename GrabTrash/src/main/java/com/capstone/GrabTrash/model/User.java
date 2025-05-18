@@ -19,6 +19,8 @@ public class User {
     private UserPreferences preferences;
     private List<SecurityQuestionAnswer> securityQuestions;
     private String phoneNumber;
+    private String barangayId;
+    private String barangayName;
 
     // Default constructor
     public User() {
@@ -144,6 +146,26 @@ public class User {
     @PropertyName("phoneNumber")
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    @PropertyName("barangayId")
+    public String getBarangayId() {
+        return barangayId;
+    }
+
+    @PropertyName("barangayId")
+    public void setBarangayId(String barangayId) {
+        this.barangayId = barangayId;
+    }
+
+    @PropertyName("barangayName")
+    public String getBarangayName() {
+        return barangayName;
+    }
+
+    @PropertyName("barangayName")
+    public void setBarangayName(String barangayName) {
+        this.barangayName = barangayName;
     }
 
     @Override

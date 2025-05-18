@@ -29,10 +29,13 @@ public class RegisterRequest {
     @JsonProperty("phoneNumber")
     private String phoneNumber;
 
+    @JsonProperty("barangayId")
+    private String barangayId;
+
     public RegisterRequest() {}
 
     public RegisterRequest(String email, String password, String username, String firstName, String lastName, 
-                          List<SecurityQuestionRequest> securityQuestions, String role, String phoneNumber) {
+                          List<SecurityQuestionRequest> securityQuestions, String role, String phoneNumber, String barangayId) {
         this.email = email;
         this.password = password;
         this.username = username;
@@ -41,6 +44,7 @@ public class RegisterRequest {
         this.securityQuestions = securityQuestions;
         this.role = role;
         this.phoneNumber = phoneNumber;
+        this.barangayId = barangayId;
     }
 
     public String getEmail() {
@@ -105,5 +109,13 @@ public class RegisterRequest {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public String getBarangayId() {
+        return barangayId;
+    }
+
+    public void setBarangayId(String barangayId) {
+        this.barangayId = barangayId;
     }
 }

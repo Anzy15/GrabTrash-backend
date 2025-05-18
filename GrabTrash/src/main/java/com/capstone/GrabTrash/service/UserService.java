@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.annotation.Lazy;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,14 +32,16 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
     private final JwtService jwtService;
+    private final BarangayService barangayService;
 
     @Autowired
-    public UserService(Firestore firestore, FirebaseAuth firebaseAuth, PasswordEncoder passwordEncoder, AuthService authService, JwtService jwtService) {
+    public UserService(Firestore firestore, FirebaseAuth firebaseAuth, PasswordEncoder passwordEncoder, AuthService authService, JwtService jwtService, @Lazy BarangayService barangayService) {
         this.firestore = firestore;
         this.firebaseAuth = firebaseAuth;
         this.passwordEncoder = passwordEncoder;
         this.authService = authService;
         this.jwtService = jwtService;
+        this.barangayService = barangayService;
     }
     
    
@@ -57,6 +60,22 @@ public class UserService {
                 error.put("error", "User with this email already exists");
                 return ResponseEntity.badRequest().body(error);
             }
+
+            // Validate barangay
+            if (request.getBarangayId() == null || request.getBarangayId().trim().isEmpty()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Barangay is required");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Check if barangay exists and is active
+            ResponseEntity<?> barangayResponse = barangayService.getBarangayById(request.getBarangayId());
+            if (barangayResponse.getStatusCode() != HttpStatus.OK) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Invalid barangay ID");
+                return ResponseEntity.badRequest().body(error);
+            }
+            Barangay barangay = (Barangay) barangayResponse.getBody();
 
             // Validate security questions
             if (request.getSecurityQuestions() == null || request.getSecurityQuestions().isEmpty()) {
@@ -96,6 +115,8 @@ public class UserService {
             user.setSecurityQuestions(securityQuestions);
             user.setRole(request.getRole() != null ? request.getRole() : "USER");
             user.setPhoneNumber(request.getPhoneNumber());
+            user.setBarangayId(request.getBarangayId());
+            user.setBarangayName(barangay.getName());
             user.setCreatedAt(Timestamp.now());
 
             // Save user to Firestore
