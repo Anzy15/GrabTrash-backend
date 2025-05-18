@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * REST Controller for handling payment-related endpoints
@@ -93,5 +94,14 @@ public class PaymentController {
     public ResponseEntity<DashboardStatsDTO> getDashboardStats() {
         DashboardStatsDTO stats = paymentService.getDashboardStats();
         return ResponseEntity.ok(stats);
+    }
+
+    /**
+     * Get top 3 barangays by pickup frequency
+     */
+    @GetMapping("/top-barangays")
+    public ResponseEntity<List<Map<String, Object>>> getTopBarangays() {
+        List<Map<String, Object>> topBarangays = paymentService.getTopBarangaysByPickupFrequency(3);
+        return ResponseEntity.ok(topBarangays);
     }
 }

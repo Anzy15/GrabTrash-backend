@@ -26,4 +26,5 @@ public class PaymentRequestDTO {
     private String paymentMethod;
     private String paymentReference;
     private String notes;
+    private String barangayId;
 }

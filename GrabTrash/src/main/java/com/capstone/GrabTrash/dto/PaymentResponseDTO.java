@@ -22,4 +22,5 @@ public class PaymentResponseDTO {
     private String paymentReference;
     private Date createdAt;
     private String message;
+    private String barangayId;
 }

@@ -31,6 +31,7 @@ public class Payment {
     private String status;
     private Date createdAt;
     private Date updatedAt;
+    private String barangayId;
     
     // Pre-persist hook to set dates
     public void prePersist() {

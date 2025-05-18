@@ -4,6 +4,7 @@ import com.capstone.GrabTrash.dto.DashboardStatsDTO;
 import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
 import com.capstone.GrabTrash.model.Payment;
+import com.capstone.GrabTrash.model.User;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.Firestore;
@@ -11,6 +12,7 @@ import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QuerySnapshot;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -18,6 +20,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.stream.Collectors;
 
 /**
  * Service for handling payment-related operations
@@ -29,10 +34,12 @@ public class PaymentService {
     private static final String COLLECTION_NAME = "payments";
 
     private final Firestore firestore;
+    private final UserService userService;
 
     @Autowired
-    public PaymentService(Firestore firestore) {
+    public PaymentService(Firestore firestore, @Lazy UserService userService) {
         this.firestore = firestore;
+        this.userService = userService;
     }
 
     /**
@@ -44,6 +51,18 @@ public class PaymentService {
         try {
             // Create a new payment record
             String paymentId = UUID.randomUUID().toString();
+
+            // Fetch user to get barangayId
+            String barangayId = null;
+            if (paymentRequest.getCustomerEmail() != null) {
+                User user = userService.getUserByEmailOrUsername(paymentRequest.getCustomerEmail());
+                if (user != null) {
+                    barangayId = user.getBarangayId();
+                }
+            }
+            if (paymentRequest.getBarangayId() != null) {
+                barangayId = paymentRequest.getBarangayId(); // allow override if provided
+            }
 
             Payment payment = Payment.builder()
                     .id(paymentId)
@@ -62,6 +81,7 @@ public class PaymentService {
                     .status("COMPLETED")
                     .createdAt(new Date())
                     .updatedAt(new Date())
+                    .barangayId(barangayId)
                     .build();
 
             // Save the payment to Firestore
@@ -75,6 +95,7 @@ public class PaymentService {
                     .paymentMethod(payment.getPaymentMethod())
                     .paymentReference(payment.getPaymentReference())
                     .createdAt(payment.getCreatedAt())
+                    .barangayId(barangayId)
                     .message("Payment processed successfully")
                     .build();
 
@@ -221,6 +242,7 @@ public class PaymentService {
                 .paymentMethod(payment.getPaymentMethod())
                 .paymentReference(payment.getPaymentReference())
                 .createdAt(payment.getCreatedAt())
+                .barangayId(payment.getBarangayId())
                 .message("Payment retrieved successfully")
                 .build();
     }
@@ -236,5 +258,36 @@ public class PaymentService {
             responseDTOs.add(mapToResponseDTO(payment));
         }
         return responseDTOs;
+    }
+
+    public List<Map<String, Object>> getTopBarangaysByPickupFrequency(int topN) {
+        try {
+            CollectionReference paymentsCollection = firestore.collection(COLLECTION_NAME);
+            Query query = paymentsCollection.whereEqualTo("status", "COMPLETED");
+            ApiFuture<QuerySnapshot> future = query.get();
+            List<Payment> payments = future.get().toObjects(Payment.class);
+
+            // Count by barangayId
+            Map<String, Long> barangayCounts = payments.stream()
+                .filter(p -> p.getBarangayId() != null)
+                .collect(Collectors.groupingBy(Payment::getBarangayId, Collectors.counting()));
+
+            // Sort and get top N
+            List<Map<String, Object>> topBarangays = barangayCounts.entrySet().stream()
+                .sorted((e1, e2) -> Long.compare(e2.getValue(), e1.getValue()))
+                .limit(topN)
+                .map(e -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("barangayId", e.getKey());
+                    map.put("count", e.getValue());
+                    return map;
+                })
+                .collect(Collectors.toList());
+
+            return topBarangays;
+        } catch (Exception e) {
+            log.error("Error getting top barangays by pickup frequency", e);
+            throw new RuntimeException("Failed to get top barangays: " + e.getMessage());
+        }
     }
 }
