@@ -52,12 +52,14 @@ public class PaymentService {
             // Create a new payment record
             String paymentId = UUID.randomUUID().toString();
 
-            // Fetch user to get barangayId
+            // Fetch user to get barangayId and phoneNumber
             String barangayId = null;
+            String phoneNumber = null;
             if (paymentRequest.getCustomerEmail() != null) {
                 User user = userService.getUserByEmailOrUsername(paymentRequest.getCustomerEmail());
                 if (user != null) {
                     barangayId = user.getBarangayId();
+                    phoneNumber = user.getPhoneNumber();
                 }
             }
             if (paymentRequest.getBarangayId() != null) {
@@ -82,6 +84,7 @@ public class PaymentService {
                     .createdAt(new Date())
                     .updatedAt(new Date())
                     .barangayId(barangayId)
+                    .phoneNumber(phoneNumber)
                     .build();
 
             // Save the payment to Firestore
@@ -92,10 +95,14 @@ public class PaymentService {
                     .id(paymentId)
                     .orderId(payment.getOrderId())
                     .status(payment.getStatus())
+                    .address(payment.getAddress())
+                    .latitude(payment.getLatitude())
+                    .longitude(payment.getLongitude())
                     .paymentMethod(payment.getPaymentMethod())
                     .paymentReference(payment.getPaymentReference())
                     .createdAt(payment.getCreatedAt())
                     .barangayId(barangayId)
+                    .phoneNumber(phoneNumber)
                     .message("Payment processed successfully")
                     .build();
 
@@ -243,6 +250,10 @@ public class PaymentService {
                 .paymentReference(payment.getPaymentReference())
                 .createdAt(payment.getCreatedAt())
                 .barangayId(payment.getBarangayId())
+                .address(payment.getAddress())
+                .latitude(payment.getLatitude() != null ? payment.getLatitude() : 0.0)
+                .longitude(payment.getLongitude() != null ? payment.getLongitude() : 0.0)
+                .phoneNumber(payment.getPhoneNumber())
                 .message("Payment retrieved successfully")
                 .build();
     }

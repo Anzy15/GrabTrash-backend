@@ -23,4 +23,8 @@ public class PaymentResponseDTO {
     private Date createdAt;
     private String message;
     private String barangayId;
+    private String address;
+    private double latitude;
+    private double longitude;
+    private String phoneNumber;
 }
