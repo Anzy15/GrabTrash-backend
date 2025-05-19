@@ -27,4 +27,5 @@ public class PaymentResponseDTO {
     private double latitude;
     private double longitude;
     private String phoneNumber;
+    private String customerName;
 }
