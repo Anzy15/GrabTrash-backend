@@ -28,4 +28,5 @@ public class PaymentResponseDTO {
     private double longitude;
     private String phoneNumber;
     private String customerName;
+    private String driverId;
 }

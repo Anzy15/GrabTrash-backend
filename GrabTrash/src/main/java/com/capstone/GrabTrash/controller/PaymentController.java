@@ -3,6 +3,7 @@ package com.capstone.GrabTrash.controller;
 import com.capstone.GrabTrash.dto.DashboardStatsDTO;
 import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
+import com.capstone.GrabTrash.dto.DriverAssignmentDTO;
 import com.capstone.GrabTrash.service.PaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -103,5 +104,29 @@ public class PaymentController {
     public ResponseEntity<List<Map<String, Object>>> getTopBarangays() {
         List<Map<String, Object>> topBarangays = paymentService.getTopBarangaysByPickupFrequency(3);
         return ResponseEntity.ok(topBarangays);
+    }
+
+    /**
+     * Assign a driver to a payment
+     * Requires JWT authentication in the Authorization header
+     * @param assignment Driver assignment information
+     * @return Updated payment information
+     */
+    @PostMapping("/assign-driver")
+    public ResponseEntity<PaymentResponseDTO> assignDriver(@RequestBody DriverAssignmentDTO assignment) {
+        PaymentResponseDTO updatedPayment = paymentService.assignDriver(assignment.getPaymentId(), assignment.getDriverId());
+        return ResponseEntity.ok(updatedPayment);
+    }
+
+    /**
+     * Get all payments assigned to a specific driver
+     * Requires JWT authentication in the Authorization header
+     * @param driverId Driver's user ID
+     * @return List of payments assigned to the driver
+     */
+    @GetMapping("/driver/{driverId}")
+    public ResponseEntity<List<PaymentResponseDTO>> getPaymentsByDriverId(@PathVariable String driverId) {
+        List<PaymentResponseDTO> payments = paymentService.getPaymentsByDriverId(driverId);
+        return ResponseEntity.ok(payments);
     }
 }

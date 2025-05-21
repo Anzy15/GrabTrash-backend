@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.google.cloud.firestore.annotation.PropertyName;
 
 /**
  * Model class for storing payment information
@@ -33,6 +34,7 @@ public class Payment {
     private Date updatedAt;
     private String barangayId;
     private String phoneNumber;
+    private String driverId;  // ID of the assigned driver
     
     // Pre-persist hook to set dates
     public void prePersist() {
@@ -40,5 +42,15 @@ public class Payment {
             createdAt = new Date();
         }
         updatedAt = new Date();
+    }
+
+    @PropertyName("driverId")
+    public String getDriverId() {
+        return driverId;
+    }
+
+    @PropertyName("driverId")
+    public void setDriverId(String driverId) {
+        this.driverId = driverId;
     }
 }

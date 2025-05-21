@@ -256,6 +256,7 @@ public class PaymentService {
                 .latitude(payment.getLatitude() != null ? payment.getLatitude() : 0.0)
                 .longitude(payment.getLongitude() != null ? payment.getLongitude() : 0.0)
                 .phoneNumber(payment.getPhoneNumber())
+                .driverId(payment.getDriverId())
                 .message("Payment retrieved successfully")
                 .build();
     }
@@ -301,6 +302,63 @@ public class PaymentService {
         } catch (Exception e) {
             log.error("Error getting top barangays by pickup frequency", e);
             throw new RuntimeException("Failed to get top barangays: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Assign a driver to a payment
+     * @param paymentId ID of the payment
+     * @param driverId ID of the driver to assign
+     * @return Updated payment information
+     */
+    public PaymentResponseDTO assignDriver(String paymentId, String driverId) {
+        try {
+            // Verify the payment exists
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+
+            // Verify the user exists and is a driver
+            User driver = userService.getUserById(driverId);
+            if (driver == null) {
+                throw new RuntimeException("Driver not found with ID: " + driverId);
+            }
+            if (!"driver".equalsIgnoreCase(driver.getRole())) {
+                throw new RuntimeException("User is not a driver");
+            }
+
+            // Update the payment with the driver ID
+            payment.setDriverId(driverId);
+            payment.setUpdatedAt(new Date());
+
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+
+            // Return the updated payment information
+            return mapToResponseDTO(payment);
+
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error assigning driver to payment", e);
+            throw new RuntimeException("Failed to assign driver: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Get all payments assigned to a specific driver
+     * @param driverId Driver's user ID
+     * @return List of payments assigned to the driver
+     */
+    public List<PaymentResponseDTO> getPaymentsByDriverId(String driverId) {
+        try {
+            CollectionReference paymentsCollection = firestore.collection(COLLECTION_NAME);
+            Query query = paymentsCollection.whereEqualTo("driverId", driverId);
+            ApiFuture<QuerySnapshot> future = query.get();
+            List<Payment> payments = future.get().toObjects(Payment.class);
+            return mapToResponseDTOList(payments);
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error getting payments by driverId", e);
+            throw new RuntimeException("Failed to get payments for driver: " + e.getMessage());
         }
     }
 }
