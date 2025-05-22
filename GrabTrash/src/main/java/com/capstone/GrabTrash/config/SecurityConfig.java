@@ -38,7 +38,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/users/register", "/api/users/login", "/api/users/security-questions",
                                "/api/users/forgot-password/reset", "/api/users/forgot-password/question",
-                               "/api/pickup-locations").permitAll()
+                               "/api/pickup-locations", "api/barangays").permitAll()
                 .requestMatchers("/error").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/pickup-locations/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/pickup-locations").authenticated()

@@ -28,7 +28,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         "/api/users/login",
         "/api/users/security-questions",
         "/api/users/forgot-password/reset",
-        "/api/users/forgot-password/question"
+        "/api/users/forgot-password/question",
+        "api/barangays"
     );
 
     public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
