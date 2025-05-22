@@ -29,4 +29,7 @@ public class PaymentResponseDTO {
     private String phoneNumber;
     private String customerName;
     private String driverId;
+    private double amount;
+    private double tax;
+    private double totalAmount;
 }
