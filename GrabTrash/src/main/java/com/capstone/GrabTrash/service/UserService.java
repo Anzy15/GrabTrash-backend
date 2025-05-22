@@ -197,6 +197,8 @@ public class UserService {
             profile.put("preferences", user.getPreferences());
             profile.put("createdAt", user.getCreatedAt());
             profile.put("phoneNumber", user.getPhoneNumber());
+            profile.put("barangayId", user.getBarangayId());
+            profile.put("barangayName", user.getBarangayName());
 
             return ResponseEntity.ok(profile);
         } catch (Exception e) {
@@ -232,15 +234,67 @@ public class UserService {
             existingUser.setFirstName(user.getFirstName());
             existingUser.setLastName(user.getLastName());
             existingUser.setEmail(user.getEmail());
+            
+            // Update barangayId if provided
+            if (user.getBarangayId() != null) {
+                // Only update if the barangayId is different
+                if (!user.getBarangayId().equals(existingUser.getBarangayId())) {
+                    // Validate the barangayId exists
+                    try {
+                        ResponseEntity<?> barangayResponse = barangayService.getBarangayById(user.getBarangayId());
+                        if (barangayResponse.getStatusCode() == HttpStatus.OK) {
+                            Barangay barangay = (Barangay) barangayResponse.getBody();
+                            existingUser.setBarangayId(user.getBarangayId());
+                            existingUser.setBarangayName(barangay.getName());
+                            System.out.println("Updated barangay to: " + barangay.getName() + " (" + user.getBarangayId() + ")");
+                        } else {
+                            Map<String, String> error = new HashMap<>();
+                            error.put("error", "Invalid barangay ID");
+                            return ResponseEntity.badRequest().body(error);
+                        }
+                    } catch (Exception e) {
+                        Map<String, String> error = new HashMap<>();
+                        error.put("error", "Error validating barangay: " + e.getMessage());
+                        return ResponseEntity.badRequest().body(error);
+                    }
+                }
+            }
 
             // Update Firestore
             firestore.collection("users").document(userId).set(existingUser).get();
+            System.out.println("Updated user in Firestore: " + existingUser.getFirstName() + " " + existingUser.getLastName() + ", barangayId: " + existingUser.getBarangayId());
 
             // Update Firebase Auth
             try {
-                UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
-                    .setEmail(user.getEmail());
-                firebaseAuth.updateUser(request);
+                // First check if the user exists in Firebase Auth
+                try {
+                    firebaseAuth.getUser(userId);
+                    
+                    // User exists, update their email
+                    UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
+                        .setEmail(user.getEmail());
+                    firebaseAuth.updateUser(request);
+                } catch (FirebaseAuthException authError) {
+                    if (authError.getErrorCode().equals("user-not-found")) {
+                        // User doesn't exist in Firebase Auth, create them
+                        System.out.println("User not found in Firebase Auth, creating new user: " + userId);
+                        UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
+                            .setUid(userId)
+                            .setEmail(user.getEmail())
+                            .setEmailVerified(false)
+                            .setPassword("tempPassword123!@#"); // Temporary password
+                        
+                        try {
+                            firebaseAuth.createUser(createRequest);
+                            System.out.println("Created new Firebase Auth user for: " + userId);
+                        } catch (FirebaseAuthException createError) {
+                            System.err.println("Warning: Could not create Firebase Auth user: " + createError.getMessage());
+                            // Don't throw exception here, as Firestore update was successful
+                        }
+                    } else {
+                        throw authError; // Re-throw if it's not a user-not-found error
+                    }
+                }
             } catch (FirebaseAuthException e) {
                 System.err.println("Warning: Could not update Firebase Auth: " + e.getMessage());
                 // Don't throw exception here, as Firestore update was successful
