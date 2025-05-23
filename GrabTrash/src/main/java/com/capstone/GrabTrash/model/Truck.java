@@ -20,6 +20,9 @@ public class Truck {
     private String size;
     private String wasteType;
     private String status; // AVAILABLE, BUSY, MAINTENANCE, etc.
+    private String make;   // Truck manufacturer (e.g., Toyota, Isuzu, etc.)
+    private String model;  // Truck model (e.g., Dyna, Elf, etc.)
+    private String plateNumber; // License plate number
     private Date createdAt;
     private Date updatedAt;
     
@@ -69,6 +72,36 @@ public class Truck {
     @PropertyName("status")
     public void setStatus(String status) {
         this.status = status;
+    }
+    
+    @PropertyName("make")
+    public String getMake() {
+        return make;
+    }
+
+    @PropertyName("make")
+    public void setMake(String make) {
+        this.make = make;
+    }
+    
+    @PropertyName("model")
+    public String getModel() {
+        return model;
+    }
+
+    @PropertyName("model")
+    public void setModel(String model) {
+        this.model = model;
+    }
+    
+    @PropertyName("plateNumber")
+    public String getPlateNumber() {
+        return plateNumber;
+    }
+
+    @PropertyName("plateNumber")
+    public void setPlateNumber(String plateNumber) {
+        this.plateNumber = plateNumber;
     }
 
     @PropertyName("createdAt")

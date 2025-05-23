@@ -49,6 +49,9 @@ public class TruckService {
                     .size(truckRequest.getSize())
                     .wasteType(truckRequest.getWasteType())
                     .status(truckRequest.getStatus() != null ? truckRequest.getStatus() : "AVAILABLE") // Default to AVAILABLE if not specified
+                    .make(truckRequest.getMake())
+                    .model(truckRequest.getModel())
+                    .plateNumber(truckRequest.getPlateNumber())
                     .createdAt(new Date())
                     .updatedAt(new Date())
                     .build();
@@ -126,6 +129,19 @@ public class TruckService {
             // Update status if provided
             if (truckRequest.getStatus() != null) {
                 existingTruck.setStatus(truckRequest.getStatus());
+            }
+            
+            // Update make, model, and plateNumber if provided
+            if (truckRequest.getMake() != null) {
+                existingTruck.setMake(truckRequest.getMake());
+            }
+            
+            if (truckRequest.getModel() != null) {
+                existingTruck.setModel(truckRequest.getModel());
+            }
+            
+            if (truckRequest.getPlateNumber() != null) {
+                existingTruck.setPlateNumber(truckRequest.getPlateNumber());
             }
             
             existingTruck.setUpdatedAt(new Date());
@@ -216,6 +232,9 @@ public class TruckService {
                 .size(truck.getSize())
                 .wasteType(truck.getWasteType())
                 .status(truck.getStatus())
+                .make(truck.getMake())
+                .model(truck.getModel())
+                .plateNumber(truck.getPlateNumber())
                 .createdAt(truck.getCreatedAt())
                 .updatedAt(truck.getUpdatedAt())
                 .message(message)

@@ -19,6 +19,9 @@ public class TruckResponseDTO {
     private String size;
     private String wasteType;
     private String status; // AVAILABLE, BUSY, MAINTENANCE, etc.
+    private String make;   // Truck manufacturer (e.g., Toyota, Isuzu, etc.)
+    private String model;  // Truck model (e.g., Dyna, Elf, etc.)
+    private String plateNumber; // License plate number
     private Date createdAt;
     private Date updatedAt;
     private String message;
