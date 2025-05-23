@@ -197,8 +197,6 @@ public class UserService {
             profile.put("preferences", user.getPreferences());
             profile.put("createdAt", user.getCreatedAt());
             profile.put("phoneNumber", user.getPhoneNumber());
-            profile.put("barangayId", user.getBarangayId());
-            profile.put("barangayName", user.getBarangayName());
 
             return ResponseEntity.ok(profile);
         } catch (Exception e) {
@@ -210,34 +208,6 @@ public class UserService {
 
     public ResponseEntity<?> updateUserProfile(String userId, User user) {
         try {
-            // Get the current authenticated user from SecurityContext
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication == null || !authentication.isAuthenticated()) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "User not authenticated");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
-            }
-
-            // Get the current user's email
-            String userEmail = authentication.getName();
-            User currentUser = getUserByEmailOrUsername(userEmail);
-            
-            if (currentUser == null) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "Authenticated user not found");
-                return ResponseEntity.badRequest().body(error);
-            }
-
-            // Check if the user is updating their own profile or is an admin
-            boolean isAdmin = "admin".equalsIgnoreCase(currentUser.getRole());
-            boolean isOwnProfile = currentUser.getUserId().equals(userId);
-            
-            if (!isOwnProfile && !isAdmin) {
-                Map<String, String> error = new HashMap<>();
-                error.put("error", "You are not authorized to update this profile");
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
-            }
-
             User existingUser = firestore.collection("users").document(userId).get().get().toObject(User.class);
             if (existingUser == null) {
                 return ResponseEntity.notFound().build();
@@ -262,67 +232,15 @@ public class UserService {
             existingUser.setFirstName(user.getFirstName());
             existingUser.setLastName(user.getLastName());
             existingUser.setEmail(user.getEmail());
-            
-            // Update barangayId if provided
-            if (user.getBarangayId() != null) {
-                // Only update if the barangayId is different
-                if (!user.getBarangayId().equals(existingUser.getBarangayId())) {
-                    // Validate the barangayId exists
-                    try {
-                        ResponseEntity<?> barangayResponse = barangayService.getBarangayById(user.getBarangayId());
-                        if (barangayResponse.getStatusCode() == HttpStatus.OK) {
-                            Barangay barangay = (Barangay) barangayResponse.getBody();
-                            existingUser.setBarangayId(user.getBarangayId());
-                            existingUser.setBarangayName(barangay.getName());
-                            System.out.println("Updated barangay to: " + barangay.getName() + " (" + user.getBarangayId() + ")");
-                        } else {
-                            Map<String, String> error = new HashMap<>();
-                            error.put("error", "Invalid barangay ID");
-                            return ResponseEntity.badRequest().body(error);
-                        }
-                    } catch (Exception e) {
-                        Map<String, String> error = new HashMap<>();
-                        error.put("error", "Error validating barangay: " + e.getMessage());
-                        return ResponseEntity.badRequest().body(error);
-                    }
-                }
-            }
 
             // Update Firestore
             firestore.collection("users").document(userId).set(existingUser).get();
-            System.out.println("Updated user in Firestore: " + existingUser.getFirstName() + " " + existingUser.getLastName() + ", barangayId: " + existingUser.getBarangayId());
 
             // Update Firebase Auth
             try {
-                // First check if the user exists in Firebase Auth
-                try {
-                    firebaseAuth.getUser(userId);
-                    
-                    // User exists, update their email
-                    UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
-                        .setEmail(user.getEmail());
-                    firebaseAuth.updateUser(request);
-                } catch (FirebaseAuthException authError) {
-                    if (authError.getErrorCode().equals("user-not-found")) {
-                        // User doesn't exist in Firebase Auth, create them
-                        System.out.println("User not found in Firebase Auth, creating new user: " + userId);
-                        UserRecord.CreateRequest createRequest = new UserRecord.CreateRequest()
-                            .setUid(userId)
-                            .setEmail(user.getEmail())
-                            .setEmailVerified(false)
-                            .setPassword("tempPassword123!@#"); // Temporary password
-                        
-                        try {
-                            firebaseAuth.createUser(createRequest);
-                            System.out.println("Created new Firebase Auth user for: " + userId);
-                        } catch (FirebaseAuthException createError) {
-                            System.err.println("Warning: Could not create Firebase Auth user: " + createError.getMessage());
-                            // Don't throw exception here, as Firestore update was successful
-                        }
-                    } else {
-                        throw authError; // Re-throw if it's not a user-not-found error
-                    }
-                }
+                UserRecord.UpdateRequest request = new UserRecord.UpdateRequest(userId)
+                    .setEmail(user.getEmail());
+                firebaseAuth.updateUser(request);
             } catch (FirebaseAuthException e) {
                 System.err.println("Warning: Could not update Firebase Auth: " + e.getMessage());
                 // Don't throw exception here, as Firestore update was successful
@@ -949,5 +867,25 @@ public class UserService {
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
         }
+    }
+
+    /**
+     * Get user ID by email
+     * @param email User email
+     * @return User ID
+     * @throws ExecutionException If there's an error retrieving the user
+     * @throws InterruptedException If the operation is interrupted
+     */
+    public String getUserIdByEmail(String email) throws ExecutionException, InterruptedException {
+        CollectionReference usersCollection = firestore.collection("users");
+        Query query = usersCollection.whereEqualTo("email", email).limit(1);
+        
+        QuerySnapshot snapshot = query.get().get();
+        if (snapshot.isEmpty()) {
+            throw new RuntimeException("User not found with email: " + email);
+        }
+        
+        User user = snapshot.getDocuments().get(0).toObject(User.class);
+        return user.getUserId();
     }
 }

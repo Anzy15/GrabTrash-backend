@@ -5,6 +5,7 @@ import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
 import com.capstone.GrabTrash.model.Payment;
 import com.capstone.GrabTrash.model.User;
+import com.capstone.GrabTrash.model.Truck;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.Firestore;
@@ -85,6 +86,8 @@ public class PaymentService {
                     .updatedAt(new Date())
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
+                    .wasteType(paymentRequest.getWasteType())
+                    .jobOrderStatus("NEW")
                     .build();
 
             // Save the payment to Firestore
@@ -105,6 +108,8 @@ public class PaymentService {
                     .createdAt(payment.getCreatedAt())
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
+                    .wasteType(payment.getWasteType())
+                    .jobOrderStatus(payment.getJobOrderStatus())
                     .message("Payment processed successfully")
                     .build();
 
@@ -261,6 +266,9 @@ public class PaymentService {
                 .longitude(payment.getLongitude() != null ? payment.getLongitude() : 0.0)
                 .phoneNumber(payment.getPhoneNumber())
                 .driverId(payment.getDriverId())
+                .wasteType(payment.getWasteType())
+                .truckId(payment.getTruckId())
+                .jobOrderStatus(payment.getJobOrderStatus())
                 .message("Payment retrieved successfully")
                 .build();
     }
@@ -363,6 +371,162 @@ public class PaymentService {
         } catch (InterruptedException | ExecutionException e) {
             log.error("Error getting payments by driverId", e);
             throw new RuntimeException("Failed to get payments for driver: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Assign a truck to a payment
+     * @param paymentId Payment ID
+     * @param truckId Truck ID
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO assignTruckToPayment(String paymentId, String truckId) {
+        try {
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Get the truck and verify it's available
+            Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
+            if (truck == null) {
+                throw new RuntimeException("Truck not found with ID: " + truckId);
+            }
+            
+            // Check if the truck is available
+            if (truck.getStatus() != null && !truck.getStatus().equals("AVAILABLE")) {
+                throw new RuntimeException("Truck is not available. Current status: " + truck.getStatus());
+            }
+            
+            // Update the payment with the truck ID
+            payment.setTruckId(truckId);
+            payment.setUpdatedAt(new Date());
+            
+            // Update job order status to IN_PROGRESS if currently NEW
+            if (payment.getJobOrderStatus() == null || "NEW".equals(payment.getJobOrderStatus())) {
+                payment.setJobOrderStatus("IN_PROGRESS");
+            }
+            
+            // Save the updated payment to Firestore
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            
+            // Update the truck status to "CURRENTLY_IN_USE"
+            truck.setStatus("CURRENTLY_IN_USE");
+            truck.setUpdatedAt(new Date());
+            
+            // Save the updated truck to Firestore
+            firestore.collection("trucks").document(truckId).set(truck);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error assigning truck to payment", e);
+            throw new RuntimeException("Failed to assign truck to payment: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Release a truck from a payment (mark it as available again)
+     * @param paymentId Payment ID
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO releaseTruckFromPayment(String paymentId) {
+        try {
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Check if the payment has an assigned truck
+            String truckId = payment.getTruckId();
+            if (truckId == null || truckId.isEmpty()) {
+                throw new RuntimeException("No truck assigned to this payment");
+            }
+            
+            // Get the truck
+            Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
+            if (truck == null) {
+                throw new RuntimeException("Truck not found with ID: " + truckId);
+            }
+            
+            // Update the truck status to "AVAILABLE"
+            truck.setStatus("AVAILABLE");
+            truck.setUpdatedAt(new Date());
+            
+            // Save the updated truck to Firestore
+            firestore.collection("trucks").document(truckId).set(truck);
+            
+            // Mark payment as COMPLETED
+            payment.setStatus("COMPLETED");
+            payment.setUpdatedAt(new Date());
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error releasing truck from payment", e);
+            throw new RuntimeException("Failed to release truck: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Update job order status by a driver
+     * @param paymentId Payment ID
+     * @param jobOrderStatus New job order status (e.g., "COMPLETED")
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO updateJobOrderStatus(String paymentId, String jobOrderStatus) {
+        try {
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Security check: verify the current user is the driver assigned to this job
+            // This would typically use SecurityContextHolder to get the current user
+            // For now, we'll rely on the security at controller level with @PreAuthorize
+            
+            // Validate job order status
+            if (jobOrderStatus == null || jobOrderStatus.isEmpty()) {
+                throw new RuntimeException("Job order status cannot be empty");
+            }
+            
+            // Store previous status for comparison
+            String previousStatus = payment.getJobOrderStatus();
+            
+            // Update job order status
+            payment.setJobOrderStatus(jobOrderStatus);
+            payment.setUpdatedAt(new Date());
+            
+            // If job is marked as COMPLETED, release the truck (set to available)
+            if ("COMPLETED".equalsIgnoreCase(jobOrderStatus) && payment.getTruckId() != null) {
+                String truckId = payment.getTruckId();
+                Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
+                
+                if (truck != null) {
+                    // Update truck status to AVAILABLE
+                    truck.setStatus("AVAILABLE");
+                    truck.setUpdatedAt(new Date());
+                    firestore.collection("trucks").document(truckId).set(truck);
+                }
+                
+                // Also update payment status
+                payment.setStatus("COMPLETED");
+            }
+            
+            // Save the updated payment to Firestore
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error updating job order status", e);
+            throw new RuntimeException("Failed to update job order status: " + e.getMessage());
         }
     }
 }

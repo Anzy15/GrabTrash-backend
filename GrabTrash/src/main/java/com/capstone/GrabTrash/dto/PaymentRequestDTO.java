@@ -27,4 +27,5 @@ public class PaymentRequestDTO {
     private String paymentReference;
     private String notes;
     private String barangayId;
+    private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
 }

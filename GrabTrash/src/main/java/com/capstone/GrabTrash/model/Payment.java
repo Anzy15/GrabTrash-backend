@@ -35,6 +35,9 @@ public class Payment {
     private String barangayId;
     private String phoneNumber;
     private String driverId;  // ID of the assigned driver
+    private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
+    private String truckId;   // ID of the assigned truck
+    private String jobOrderStatus;  // Status of the job order (NEW, IN_PROGRESS, COMPLETED, CANCELLED)
     
     // Pre-persist hook to set dates
     public void prePersist() {
@@ -52,5 +55,35 @@ public class Payment {
     @PropertyName("driverId")
     public void setDriverId(String driverId) {
         this.driverId = driverId;
+    }
+    
+    @PropertyName("wasteType")
+    public String getWasteType() {
+        return wasteType;
+    }
+
+    @PropertyName("wasteType")
+    public void setWasteType(String wasteType) {
+        this.wasteType = wasteType;
+    }
+    
+    @PropertyName("truckId")
+    public String getTruckId() {
+        return truckId;
+    }
+
+    @PropertyName("truckId")
+    public void setTruckId(String truckId) {
+        this.truckId = truckId;
+    }
+    
+    @PropertyName("jobOrderStatus")
+    public String getJobOrderStatus() {
+        return jobOrderStatus;
+    }
+
+    @PropertyName("jobOrderStatus")
+    public void setJobOrderStatus(String jobOrderStatus) {
+        this.jobOrderStatus = jobOrderStatus;
     }
 }

@@ -32,4 +32,7 @@ public class PaymentResponseDTO {
     private double amount;
     private double tax;
     private double totalAmount;
+    private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
+    private String truckId;    // ID of the assigned truck
+    private String jobOrderStatus;  // Status of the job order (NEW, IN_PROGRESS, COMPLETED, CANCELLED)
 }
