@@ -210,6 +210,34 @@ public class UserService {
 
     public ResponseEntity<?> updateUserProfile(String userId, User user) {
         try {
+            // Get the current authenticated user from SecurityContext
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            // Get the current user's email
+            String userEmail = authentication.getName();
+            User currentUser = getUserByEmailOrUsername(userEmail);
+            
+            if (currentUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Authenticated user not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Check if the user is updating their own profile or is an admin
+            boolean isAdmin = "admin".equalsIgnoreCase(currentUser.getRole());
+            boolean isOwnProfile = currentUser.getUserId().equals(userId);
+            
+            if (!isOwnProfile && !isAdmin) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "You are not authorized to update this profile");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
             User existingUser = firestore.collection("users").document(userId).get().get().toObject(User.class);
             if (existingUser == null) {
                 return ResponseEntity.notFound().build();
