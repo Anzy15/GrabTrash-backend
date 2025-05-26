@@ -37,6 +37,9 @@ public class CollectionScheduleService {
     @Autowired
     private BarangayService barangayService;
 
+    @Autowired
+    private NotificationService notificationService;
+
     private String generateShortId() {
         long timestamp = System.currentTimeMillis();
         String timestampStr = Long.toString(timestamp, 36);
@@ -133,6 +136,9 @@ public class CollectionScheduleService {
                     .document(schedule.getScheduleId())
                     .set(schedule);
 
+            // Send notification
+            notificationService.notifyScheduleChange(schedule, "new");
+
             return ResponseEntity.ok(convertModelToDTO(schedule));
         } catch (DateTimeParseException e) {
             Map<String, String> error = new HashMap<>();
@@ -189,6 +195,9 @@ public class CollectionScheduleService {
                     .document(scheduleId)
                     .set(schedule);
 
+            // Send notification
+            notificationService.notifyScheduleChange(schedule, "update");
+
             return ResponseEntity.ok(convertModelToDTO(schedule));
         } catch (DateTimeParseException e) {
             Map<String, String> error = new HashMap<>();
@@ -228,6 +237,9 @@ public class CollectionScheduleService {
             firestore.collection("collection_schedules")
                     .document(scheduleId)
                     .set(schedule);
+
+            // Send notification
+            notificationService.notifyScheduleChange(schedule, "cancel");
 
             Map<String, String> response = new HashMap<>();
             response.put("message", "Schedule removed successfully");

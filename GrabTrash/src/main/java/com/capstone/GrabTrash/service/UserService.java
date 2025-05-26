@@ -118,6 +118,7 @@ public class UserService {
             user.setBarangayId(request.getBarangayId());
             user.setBarangayName(barangay.getName());
             user.setCreatedAt(Timestamp.now());
+            user.setFcmToken(null); // Initialize FCM token as null
 
             // Save user to Firestore
             String userId = firestore.collection("users").document().getId();
@@ -232,6 +233,8 @@ public class UserService {
             existingUser.setFirstName(user.getFirstName());
             existingUser.setLastName(user.getLastName());
             existingUser.setEmail(user.getEmail());
+            // Preserve existing FCM token
+            existingUser.setFcmToken(existingUser.getFcmToken());
 
             // Update Firestore
             firestore.collection("users").document(userId).set(existingUser).get();
