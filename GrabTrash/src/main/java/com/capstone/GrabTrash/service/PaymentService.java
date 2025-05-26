@@ -7,10 +7,9 @@ import com.capstone.GrabTrash.model.Payment;
 import com.capstone.GrabTrash.model.User;
 import com.capstone.GrabTrash.model.Truck;
 import com.google.api.core.ApiFuture;
-import com.google.cloud.firestore.CollectionReference;
-import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.Query;
-import com.google.cloud.firestore.QuerySnapshot;
+import com.google.cloud.firestore.*;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.cloud.Timestamp;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -35,12 +34,16 @@ public class PaymentService {
     private static final String COLLECTION_NAME = "payments";
 
     private final Firestore firestore;
+    private final FirebaseAuth firebaseAuth;
     private final UserService userService;
+    private final NotificationService notificationService;
 
     @Autowired
-    public PaymentService(Firestore firestore, @Lazy UserService userService) {
+    public PaymentService(Firestore firestore, FirebaseAuth firebaseAuth, UserService userService, NotificationService notificationService) {
         this.firestore = firestore;
+        this.firebaseAuth = firebaseAuth;
         this.userService = userService;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -343,9 +346,28 @@ public class PaymentService {
             // Update the payment with the driver ID
             payment.setDriverId(driverId);
             payment.setUpdatedAt(new Date());
+            payment.setJobOrderStatus("ASSIGNED"); // Set initial job order status
 
             // Save the updated payment
             firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+
+            // Send notification to the driver
+            try {
+                String title = "New Job Assignment";
+                String body = String.format("You have been assigned to collect %s waste at %s", 
+                    payment.getWasteType(), payment.getAddress());
+                Map<String, String> data = new HashMap<>();
+                data.put("paymentId", paymentId);
+                data.put("type", "job_assignment");
+                data.put("customerName", payment.getCustomerName());
+                data.put("address", payment.getAddress());
+                data.put("wasteType", payment.getWasteType());
+                
+                notificationService.sendNotificationToUser(driverId, title, body, data);
+            } catch (Exception e) {
+                log.error("Error sending notification to driver", e);
+                // Don't throw the error as the assignment was successful
+            }
 
             // Return the updated payment information
             return mapToResponseDTO(payment);
