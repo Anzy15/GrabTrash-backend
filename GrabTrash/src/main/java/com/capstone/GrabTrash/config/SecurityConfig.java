@@ -48,12 +48,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/pickup-locations/**").authenticated()
                 // Require authentication for payment endpoints
                 .requestMatchers("/api/payments/**").authenticated()
-                // Allow drivers to access their endpoints
-                .requestMatchers("/api/driver/**").hasAnyRole("DRIVER", "driver")
-                // Allow admin and private_entity to access total-active endpoint
-                .requestMatchers("/api/users/total-active").hasAnyRole("ADMIN", "admin", "PRIVATE_ENTITY", "private_entity")
                 // Require ADMIN role for truck management endpoints
-                .requestMatchers("/api/trucks/**").hasAnyRole("ADMIN", "admin")
+                .requestMatchers("/api/trucks/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

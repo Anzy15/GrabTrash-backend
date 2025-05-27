@@ -11,7 +11,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 @Service
@@ -52,13 +54,25 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     private UserDetails createUserDetails(User user) {
-        String role = user.getRole();
-        // If role already starts with ROLE_, use it as is, otherwise add the prefix
-        String authorityRole = role.startsWith("ROLE_") ? role : "ROLE_" + role;
+        // Create list of authorities
+        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+        
+        // Add the user role with both formats (with and without ROLE_ prefix)
+        // This ensures authorities work with both hasRole() and hasAuthority()
+        if (user.getRole() != null && !user.getRole().isEmpty()) {
+            String role = user.getRole().toUpperCase(); // Convert to uppercase for consistency
+            
+            // Add the role with ROLE_ prefix (for hasRole)
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+            
+            // Add the role as-is (for hasAuthority)
+            authorities.add(new SimpleGrantedAuthority(role));
+        }
+        
         return new org.springframework.security.core.userdetails.User(
             user.getEmail(), // Using email as the principal
             user.getPassword(),
-            Collections.singletonList(new SimpleGrantedAuthority(authorityRole.toUpperCase()))
+            authorities
         );
     }
 } 
