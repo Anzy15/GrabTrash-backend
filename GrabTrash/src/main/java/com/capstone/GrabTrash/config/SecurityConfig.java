@@ -50,6 +50,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/payments/**").authenticated()
                 // Require ADMIN role for truck management endpoints
                 .requestMatchers("/api/trucks/**").hasRole("ADMIN")
+                // Allow both ADMIN and PRIVATE_ENTITY roles to update location
+                .requestMatchers("/api/users/location").hasAnyRole("ADMIN", "PRIVATE_ENTITY")
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

@@ -10,6 +10,7 @@ import com.capstone.GrabTrash.dto.PasswordUpdateRequest;
 import com.capstone.GrabTrash.dto.ForgotPasswordRequest;
 import com.capstone.GrabTrash.dto.SecurityQuestionRequest;
 import com.capstone.GrabTrash.dto.RegisterRequest;
+import com.capstone.GrabTrash.dto.LocationUpdateRequest;
 import com.capstone.GrabTrash.service.UserService;
 
 import java.util.HashMap;
@@ -114,5 +115,29 @@ public class UserController {
     @PutMapping("/{userId}/role")
     public ResponseEntity<?> updateUserRole(@PathVariable String userId, @RequestBody Map<String, String> request) {
         return userService.updateUserRole(userId, request.get("role"));
+    }
+
+    /**
+     * Update private entity user location (admin only)
+     */
+    @PutMapping("/location")
+    public ResponseEntity<?> updateUserLocation(@RequestBody LocationUpdateRequest request) {
+        return userService.updateUserLocation(request);
+    }
+
+    /**
+     * Get private entity user location (admin or private entity)
+     */
+    @GetMapping("/location/{userId}")
+    public ResponseEntity<?> getUserLocation(@PathVariable String userId) {
+        return userService.getUserLocation(userId);
+    }
+
+    /**
+     * Get locations of all private entity users (admin only)
+     */
+    @GetMapping("/locations/private-entities")
+    public ResponseEntity<?> getAllPrivateEntityLocations() {
+        return userService.getAllPrivateEntityLocations();
     }
 }

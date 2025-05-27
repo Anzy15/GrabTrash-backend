@@ -6,6 +6,7 @@ import com.capstone.GrabTrash.dto.ForgotPasswordRequest;
 import com.capstone.GrabTrash.dto.SecurityQuestionRequest;
 import com.capstone.GrabTrash.dto.RegisterRequest;
 import com.capstone.GrabTrash.dto.SecurityQuestionsList;
+import com.capstone.GrabTrash.dto.LocationUpdateRequest;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import com.google.cloud.Timestamp;
@@ -197,6 +198,8 @@ public class UserService {
             profile.put("preferences", user.getPreferences());
             profile.put("createdAt", user.getCreatedAt());
             profile.put("phoneNumber", user.getPhoneNumber());
+            profile.put("barangayId", user.getBarangayId());     // Add this line
+            profile.put("barangayName", user.getBarangayName()); // Add this line
 
             return ResponseEntity.ok(profile);
         } catch (Exception e) {
@@ -900,5 +903,201 @@ public class UserService {
         
         User user = snapshot.getDocuments().get(0).toObject(User.class);
         return user.getUserId();
+    }
+
+    /**
+     * Update user location coordinates (admin or private entity)
+     */
+    public ResponseEntity<?> updateUserLocation(LocationUpdateRequest request) {
+        try {
+            // Get the current authenticated user
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            String userEmail = authentication.getName();
+            User currentUser = getUserByEmailOrUsername(userEmail);
+            
+            if (currentUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Get the user to update
+            User userToUpdate = getUserById(request.getUserId());
+            if (userToUpdate == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.notFound().build();
+            }
+
+            // Check permissions
+            boolean isAdmin = "admin".equalsIgnoreCase(currentUser.getRole());
+            boolean isPrivateEntity = "private_entity".equalsIgnoreCase(currentUser.getRole());
+            boolean isUpdatingSelf = currentUser.getUserId().equals(userToUpdate.getUserId());
+
+            // Only allow admin to update any user's location, or private entity to update their own location
+            if (!isAdmin && !(isPrivateEntity && isUpdatingSelf)) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Access denied. You can only update your own location.");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            // If admin is updating someone else's location, verify the target is a private entity
+            if (isAdmin && !isUpdatingSelf && !"private_entity".equalsIgnoreCase(userToUpdate.getRole())) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Location can only be set for private entity users");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Update the user's location
+            userToUpdate.setLatitude(request.getLatitude());
+            userToUpdate.setLongitude(request.getLongitude());
+
+            // Save to Firestore
+            firestore.collection("users").document(userToUpdate.getUserId()).set(userToUpdate).get();
+
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "User location updated successfully");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Get user location coordinates (admin or private entity)
+     */
+    public ResponseEntity<?> getUserLocation(String userId) {
+        try {
+            // Get the current authenticated user
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            String userEmail = authentication.getName();
+            User currentUser = getUserByEmailOrUsername(userEmail);
+            
+            if (currentUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Get the requested user
+            User targetUser = getUserById(userId);
+            if (targetUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.notFound().build();
+            }
+
+            // Check permissions
+            boolean isAdmin = "admin".equalsIgnoreCase(currentUser.getRole());
+            boolean isPrivateEntity = "private_entity".equalsIgnoreCase(currentUser.getRole());
+            boolean isRequestingSelf = currentUser.getUserId().equals(targetUser.getUserId());
+
+            // Only allow admin to view any private entity's location, or private entity to view their own location
+            if (!isAdmin && !(isPrivateEntity && isRequestingSelf)) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Access denied. You can only view your own location.");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            // If admin is requesting someone else's location, verify the target is a private entity
+            if (isAdmin && !isRequestingSelf && !"private_entity".equalsIgnoreCase(targetUser.getRole())) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Location can only be viewed for private entity users");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Create response with location data
+            Map<String, Object> response = new HashMap<>();
+            response.put("userId", targetUser.getUserId());
+            response.put("latitude", targetUser.getLatitude());
+            response.put("longitude", targetUser.getLongitude());
+            response.put("username", targetUser.getUsername());
+            response.put("firstName", targetUser.getFirstName());
+            response.put("lastName", targetUser.getLastName());
+            response.put("barangayName", targetUser.getBarangayName());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Get locations of all private entity users (admin only)
+     */
+    public ResponseEntity<?> getAllPrivateEntityLocations() {
+        try {
+            // Get the current authenticated user
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            String userEmail = authentication.getName();
+            User currentUser = getUserByEmailOrUsername(userEmail);
+            
+            if (currentUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Check if the user is an admin
+            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Access denied. Admin role required.");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            // Query all private entity users
+            Query query = firestore.collection("users")
+                .whereEqualTo("role", "private_entity");
+            
+            QuerySnapshot querySnapshot = query.get().get();
+            List<Map<String, Object>> locations = new ArrayList<>();
+            
+            for (QueryDocumentSnapshot document : querySnapshot.getDocuments()) {
+                User user = document.toObject(User.class);
+                if (user.getLatitude() != null && user.getLongitude() != null) {
+                    Map<String, Object> locationData = new HashMap<>();
+                    locationData.put("userId", user.getUserId());
+                    locationData.put("latitude", user.getLatitude());
+                    locationData.put("longitude", user.getLongitude());
+                    locationData.put("username", user.getUsername());
+                    locationData.put("firstName", user.getFirstName());
+                    locationData.put("lastName", user.getLastName());
+                    locationData.put("barangayName", user.getBarangayName());
+                    locationData.put("phoneNumber", user.getPhoneNumber());
+                    locations.add(locationData);
+                }
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("locations", locations);
+            response.put("count", locations.size());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
     }
 }

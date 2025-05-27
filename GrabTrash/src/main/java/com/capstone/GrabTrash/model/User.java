@@ -21,6 +21,8 @@ public class User {
     private String phoneNumber;
     private String barangayId;
     private String barangayName;
+    private Double latitude;
+    private Double longitude;
 
     // Default constructor
     public User() {
@@ -168,6 +170,26 @@ public class User {
         this.barangayName = barangayName;
     }
 
+    @PropertyName("latitude")
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    @PropertyName("latitude")
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    @PropertyName("longitude")
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    @PropertyName("longitude")
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
+    }
+
     @Override
     public String toString() {
         return "User{" +
@@ -180,6 +202,8 @@ public class User {
                 ", createdAt=" + createdAt +
                 ", location='" + location + '\'' +
                 ", preferences=" + preferences +
+                ", latitude=" + latitude +
+                ", longitude=" + longitude +
                 '}';
     }
 }
