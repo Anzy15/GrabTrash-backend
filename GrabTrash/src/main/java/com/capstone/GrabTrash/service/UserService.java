@@ -228,6 +228,19 @@ public class UserService {
                 return ResponseEntity.badRequest().body(error);
             }
 
+            // Validate barangay if it's being updated
+            if (user.getBarangayId() != null && !user.getBarangayId().equals(existingUser.getBarangayId())) {
+                ResponseEntity<?> barangayResponse = barangayService.getBarangayById(user.getBarangayId());
+                if (barangayResponse.getStatusCode() != HttpStatus.OK) {
+                    Map<String, String> error = new HashMap<>();
+                    error.put("error", "Invalid barangay ID");
+                    return ResponseEntity.badRequest().body(error);
+                }
+                Barangay barangay = (Barangay) barangayResponse.getBody();
+                existingUser.setBarangayId(user.getBarangayId());
+                existingUser.setBarangayName(barangay.getName());
+            }
+
             // Update allowed fields
             existingUser.setFirstName(user.getFirstName());
             existingUser.setLastName(user.getLastName());
@@ -251,7 +264,7 @@ public class UserService {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
+            error.put("error", "Failed to update profile: " + e.getMessage());
             return ResponseEntity.badRequest().body(error);
         }
     }
