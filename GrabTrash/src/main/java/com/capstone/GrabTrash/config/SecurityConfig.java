@@ -49,11 +49,13 @@ public class SecurityConfig {
                 // Require authentication for payment endpoints
                 .requestMatchers("/api/payments/**").authenticated()
                 // Allow drivers to access their endpoints
-                .requestMatchers("/api/driver/**").hasAnyRole("DRIVER", "driver")
-                // Allow admin and private_entity to access total-active endpoint
-                .requestMatchers("/api/users/total-active").hasAnyRole("ADMIN", "admin", "PRIVATE_ENTITY", "private_entity")
-                // Require ADMIN role for truck management endpoints
-                .requestMatchers("/api/trucks/**").hasAnyRole("ADMIN", "admin")
+                .requestMatchers("/api/driver/**").hasRole("driver")
+                // Require admin role for admin endpoints
+                .requestMatchers("/api/users/all").hasRole("admin")
+                .requestMatchers("/api/users/{userId}").hasRole("admin")
+                .requestMatchers("/api/users/{userId}/role").hasRole("admin")
+                // Require admin role for truck management endpoints
+                .requestMatchers("/api/trucks/**").hasRole("admin")
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

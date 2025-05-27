@@ -21,7 +21,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/driver")
-@PreAuthorize("hasAnyRole('DRIVER', 'driver')")
+@PreAuthorize("hasRole('driver')")
 public class DriverController {
 
     private final PaymentService paymentService;
@@ -39,17 +39,9 @@ public class DriverController {
      * @return List of all payments assigned to the driver
      */
     @GetMapping("/payments")
-    @PreAuthorize("hasAnyRole('DRIVER', 'driver')")
+    @PreAuthorize("hasRole('driver')")
     public ResponseEntity<List<PaymentResponseDTO>> getAssignedPayments() {
-        // Get the current authenticated driver's ID
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String driverEmail = authentication.getName(); // This is the driver's email
-        
-        // Get driver's ID from email
-        String driverId = getUserIdFromEmail(driverEmail);
-        
-        List<PaymentResponseDTO> payments = paymentService.getPaymentsByDriverId(driverId);
-        return ResponseEntity.ok(payments);
+        return ResponseEntity.ok(paymentService.getAssignedPayments());
     }
     
     /**
@@ -59,23 +51,9 @@ public class DriverController {
      * @return List of all payments assigned to the driver
      */
     @GetMapping("/{driverId}/payments")
-    @PreAuthorize("hasAnyRole('DRIVER', 'driver')")
+    @PreAuthorize("hasRole('driver')")
     public ResponseEntity<List<PaymentResponseDTO>> getAssignedPaymentsByDriverId(@PathVariable String driverId) {
-        // Get the current authenticated driver's email
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String driverEmail = authentication.getName();
-        
-        // Get authenticated driver's ID from email
-        String authenticatedDriverId = getUserIdFromEmail(driverEmail);
-        
-        // Security check: verify driver can only access their own payments
-        if (!authenticatedDriverId.equals(driverId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, 
-                "You are not authorized to view another driver's payments");
-        }
-        
-        List<PaymentResponseDTO> payments = paymentService.getPaymentsByDriverId(driverId);
-        return ResponseEntity.ok(payments);
+        return ResponseEntity.ok(paymentService.getAssignedPaymentsByDriverId(driverId));
     }
     
     /**
@@ -86,33 +64,11 @@ public class DriverController {
      * @return Updated payment/job order
      */
     @PutMapping("/job/{paymentId}/status")
-    @PreAuthorize("hasAnyRole('DRIVER', 'driver')")
+    @PreAuthorize("hasRole('driver')")
     public ResponseEntity<PaymentResponseDTO> updateJobOrderStatus(
             @PathVariable String paymentId,
             @RequestBody JobOrderStatusUpdateDTO statusUpdate) {
-        
-        // Get the current authenticated driver's email
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String driverEmail = authentication.getName();
-        
-        // Get driver's ID from email
-        String driverId = getUserIdFromEmail(driverEmail);
-        
-        // Get the payment
-        PaymentResponseDTO payment = paymentService.getPaymentById(paymentId);
-        
-        // Verify the payment is assigned to this driver
-        if (!driverId.equals(payment.getDriverId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, 
-                "You are not authorized to update this job order. It is assigned to another driver.");
-        }
-        
-        // Update the job order status
-        PaymentResponseDTO response = paymentService.updateJobOrderStatus(
-                paymentId, 
-                statusUpdate.getJobOrderStatus());
-                
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(paymentService.updateJobOrderStatus(paymentId, statusUpdate.getJobOrderStatus()));
     }
     
     /**
