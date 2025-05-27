@@ -87,7 +87,7 @@ public class PaymentService {
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
                     .wasteType(paymentRequest.getWasteType())
-                    .jobOrderStatus("Available")
+                    .jobOrderStatus("NEW")
                     .build();
 
             // Save the payment to Firestore
