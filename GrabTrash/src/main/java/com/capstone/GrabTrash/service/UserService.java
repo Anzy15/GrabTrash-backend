@@ -631,7 +631,7 @@ public class UserService {
             }
 
             // Check if the user is an admin
-            if (!currentUser.getRole().equals("admin")) {
+            if (!"ROLE_ADMIN".equalsIgnoreCase(currentUser.getRole())) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Access denied. Admin role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -639,25 +639,18 @@ public class UserService {
 
             // Get all users from Firestore
             QuerySnapshot querySnapshot = firestore.collection("users").get().get();
-            List<Map<String, Object>> users = new ArrayList<>();
+            List<User> users = new ArrayList<>();
             
-            querySnapshot.getDocuments().forEach(document -> {
+            for (QueryDocumentSnapshot document : querySnapshot.getDocuments()) {
                 User user = document.toObject(User.class);
-                Map<String, Object> userMap = new HashMap<>();
-                userMap.put("userId", user.getUserId());
-                userMap.put("email", user.getEmail());
-                userMap.put("username", user.getUsername());
-                userMap.put("firstName", user.getFirstName());
-                userMap.put("lastName", user.getLastName());
-                userMap.put("role", user.getRole());
-                userMap.put("phoneNumber", user.getPhoneNumber());
-                userMap.put("barangayId", user.getBarangayId());
-                userMap.put("createdAt", user.getCreatedAt());
-                users.add(userMap);
-            });
+                // Remove sensitive information
+                user.setPassword(null);
+                users.add(user);
+            }
 
-            return ResponseEntity.ok(users);
-
+            Map<String, Object> response = new HashMap<>();
+            response.put("users", users);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());

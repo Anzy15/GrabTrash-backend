@@ -92,7 +92,6 @@ public class UserController {
     }
 
     @GetMapping("/all")
-    @PreAuthorize("hasRole('admin')")
     public ResponseEntity<?> getAllUsers() {
         return userService.getAllUsers();
     }
@@ -104,14 +103,18 @@ public class UserController {
     }
 
     @DeleteMapping("/{userId}")
-    @PreAuthorize("hasRole('admin')")
     public ResponseEntity<?> deleteUser(@PathVariable String userId) {
-        return userService.deleteUser(userId);
+        ResponseEntity<?> response = userService.deleteUser(userId);
+        if (response.getStatusCode() == HttpStatus.FORBIDDEN) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Access denied. Only admin users can delete accounts.");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        }
+        return response;
     }
 
     @PutMapping("/{userId}/role")
-    @PreAuthorize("hasRole('admin')")
-    public ResponseEntity<?> updateUserRole(@PathVariable String userId, @RequestBody Map<String, String> roleUpdate) {
-        return userService.updateUserRole(userId, roleUpdate.get("role"));
+    public ResponseEntity<?> updateUserRole(@PathVariable String userId, @RequestBody Map<String, String> request) {
+        return userService.updateUserRole(userId, request.get("role"));
     }
 }

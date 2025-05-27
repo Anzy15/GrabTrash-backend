@@ -19,7 +19,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/trucks")
-@PreAuthorize("hasRole('admin')")
+@PreAuthorize("hasRole('ADMIN')")
 public class TruckController {
 
     private final TruckService truckService;
@@ -38,7 +38,7 @@ public class TruckController {
      * @return Truck confirmation response
      */
     @PostMapping
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TruckResponseDTO> createTruck(@RequestBody TruckRequestDTO truckRequest) {
         TruckResponseDTO response = truckService.createTruck(truckRequest);
         return ResponseEntity.ok(response);
@@ -50,7 +50,7 @@ public class TruckController {
      * @return List of all trucks
      */
     @GetMapping
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<TruckResponseDTO>> getAllTrucks() {
         List<TruckResponseDTO> trucks = truckService.getAllTrucks();
         return ResponseEntity.ok(trucks);
@@ -63,7 +63,7 @@ public class TruckController {
      * @return Truck information
      */
     @GetMapping("/{truckId}")
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TruckResponseDTO> getTruckById(@PathVariable String truckId) {
         TruckResponseDTO truck = truckService.getTruckById(truckId);
         return ResponseEntity.ok(truck);
@@ -77,7 +77,7 @@ public class TruckController {
      * @return Updated truck response
      */
     @PutMapping("/{truckId}")
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TruckResponseDTO> updateTruck(@PathVariable String truckId, @RequestBody TruckRequestDTO truckRequest) {
         TruckResponseDTO response = truckService.updateTruck(truckId, truckRequest);
         return ResponseEntity.ok(response);
@@ -90,7 +90,7 @@ public class TruckController {
      * @return Success response
      */
     @DeleteMapping("/{truckId}")
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TruckResponseDTO> deleteTruck(@PathVariable String truckId) {
         TruckResponseDTO response = truckService.deleteTruck(truckId);
         return ResponseEntity.ok(response);
@@ -103,7 +103,7 @@ public class TruckController {
      * @return List of trucks for the waste type
      */
     @GetMapping("/waste-type/{wasteType}")
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<TruckResponseDTO>> getTrucksByWasteType(@PathVariable String wasteType) {
         List<TruckResponseDTO> trucks = truckService.getTrucksByWasteType(wasteType);
         return ResponseEntity.ok(trucks);
@@ -116,7 +116,7 @@ public class TruckController {
      * @return List of trucks for the given status
      */
     @GetMapping("/status/{status}")
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<TruckResponseDTO>> getTrucksByStatus(@PathVariable String status) {
         List<TruckResponseDTO> trucks = truckService.getTrucksByStatus(status);
         return ResponseEntity.ok(trucks);
@@ -129,7 +129,7 @@ public class TruckController {
      * @return Updated payment response
      */
     @PostMapping("/assign")
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PaymentResponseDTO> assignTruckToPayment(@RequestBody TruckAssignmentDTO assignment) {
         PaymentResponseDTO response = paymentService.assignTruckToPayment(assignment.getPaymentId(), assignment.getTruckId());
         return ResponseEntity.ok(response);
@@ -142,7 +142,7 @@ public class TruckController {
      * @return Updated payment response
      */
     @PostMapping("/release/{paymentId}")
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PaymentResponseDTO> releaseTruckFromPayment(@PathVariable String paymentId) {
         PaymentResponseDTO response = paymentService.releaseTruckFromPayment(paymentId);
         return ResponseEntity.ok(response);
