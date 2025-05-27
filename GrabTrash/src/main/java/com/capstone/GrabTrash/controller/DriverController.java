@@ -21,7 +21,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/driver")
-@PreAuthorize("hasRole('DRIVER')")
+@PreAuthorize("hasAnyRole('DRIVER', 'driver')")
 public class DriverController {
 
     private final PaymentService paymentService;
@@ -39,7 +39,7 @@ public class DriverController {
      * @return List of all payments assigned to the driver
      */
     @GetMapping("/payments")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize("hasAnyRole('DRIVER', 'driver')")
     public ResponseEntity<List<PaymentResponseDTO>> getAssignedPayments() {
         // Get the current authenticated driver's ID
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -59,7 +59,7 @@ public class DriverController {
      * @return List of all payments assigned to the driver
      */
     @GetMapping("/{driverId}/payments")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize("hasAnyRole('DRIVER', 'driver')")
     public ResponseEntity<List<PaymentResponseDTO>> getAssignedPaymentsByDriverId(@PathVariable String driverId) {
         // Get the current authenticated driver's email
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -86,7 +86,7 @@ public class DriverController {
      * @return Updated payment/job order
      */
     @PutMapping("/job/{paymentId}/status")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize("hasAnyRole('DRIVER', 'driver')")
     public ResponseEntity<PaymentResponseDTO> updateJobOrderStatus(
             @PathVariable String paymentId,
             @RequestBody JobOrderStatusUpdateDTO statusUpdate) {

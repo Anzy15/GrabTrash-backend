@@ -113,7 +113,7 @@ public class UserService {
             user.setFirstName(request.getFirstName());
             user.setLastName(request.getLastName());
             user.setSecurityQuestions(securityQuestions);
-            user.setRole(request.getRole() != null ? request.getRole() : "USER");
+            user.setRole(request.getRole() != null ? "ROLE_" + request.getRole().toUpperCase() : "ROLE_USER");
             user.setPhoneNumber(request.getPhoneNumber());
             user.setBarangayId(request.getBarangayId());
             user.setBarangayName(barangay.getName());
@@ -634,7 +634,7 @@ public class UserService {
             }
 
             // Check if the user is an admin
-            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+            if (!"ROLE_ADMIN".equalsIgnoreCase(currentUser.getRole())) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Access denied. Admin role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -684,10 +684,11 @@ public class UserService {
                 return ResponseEntity.badRequest().body(error);
             }
 
-            // Check if the user is an admin
-            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+            // Check if the user has the required role (admin or private_entity)
+            String userRole = currentUser.getRole().toLowerCase();
+            if (!userRole.equals("admin") && !userRole.equals("private_entity")) {
                 Map<String, String> error = new HashMap<>();
-                error.put("error", "Access denied. Admin role required.");
+                error.put("error", "Access denied. Admin or Private Entity role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
             }
 
@@ -728,7 +729,7 @@ public class UserService {
             }
 
             // Check if the user is an admin
-            if (!"admin".equalsIgnoreCase(adminUser.getRole())) {
+            if (!"ROLE_ADMIN".equalsIgnoreCase(adminUser.getRole())) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Access denied. Admin role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -786,7 +787,7 @@ public class UserService {
             }
 
             // Check if the user is an admin
-            if (!"admin".equalsIgnoreCase(adminUser.getRole())) {
+            if (!"ROLE_ADMIN".equalsIgnoreCase(adminUser.getRole())) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Access denied. Admin role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -802,7 +803,7 @@ public class UserService {
 
             // Update the user's role
             User user = userDoc.toObject(User.class);
-            user.setRole(newRole);
+            user.setRole("ROLE_" + newRole.toUpperCase());
             firestore.collection("users").document(userId).set(user).get();
 
             Map<String, String> response = new HashMap<>();
@@ -839,7 +840,7 @@ public class UserService {
             }
 
             // Check if the user is an admin
-            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+            if (!"ROLE_ADMIN".equalsIgnoreCase(currentUser.getRole())) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Access denied. Admin role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
