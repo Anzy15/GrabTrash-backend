@@ -30,11 +30,7 @@ public class JwtService {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getUserId());
         claims.put("email", user.getEmail());
-        String role = user.getRole();
-        if (!role.startsWith("ROLE_")) {
-            role = "ROLE_" + role.toUpperCase();
-        }
-        claims.put("role", role);
+        claims.put("role", user.getRole());
         
         return Jwts.builder()
                 .setClaims(claims)

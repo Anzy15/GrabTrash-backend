@@ -52,13 +52,10 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     private UserDetails createUserDetails(User user) {
-        String role = user.getRole();
-        // If role already starts with ROLE_, use it as is, otherwise add the prefix
-        String authorityRole = role.startsWith("ROLE_") ? role : "ROLE_" + role;
         return new org.springframework.security.core.userdetails.User(
             user.getEmail(), // Using email as the principal
             user.getPassword(),
-            Collections.singletonList(new SimpleGrantedAuthority(authorityRole.toUpperCase()))
+            Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole()))
         );
     }
 } 
