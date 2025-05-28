@@ -36,6 +36,9 @@ public class CollectionScheduleService {
 
     @Autowired
     private BarangayService barangayService;
+    
+    @Autowired
+    private NotificationService notificationService;
 
     private String generateShortId() {
         long timestamp = System.currentTimeMillis();
@@ -132,6 +135,33 @@ public class CollectionScheduleService {
             firestore.collection("collection_schedules")
                     .document(schedule.getScheduleId())
                     .set(schedule);
+                    
+            // Send notification to customers in this barangay about the new schedule
+            String notificationTitle = "New Garbage Collection Schedule";
+            String notificationBody = "A new " + schedule.getWasteType() + " collection has been scheduled";
+            
+            if (schedule.isRecurring()) {
+                notificationBody += " every " + schedule.getRecurringDay() + " at " + schedule.getRecurringTime();
+            } else if (schedule.getCollectionDateTime() != null) {
+                // Format date for better readability
+                Date date = schedule.getCollectionDateTime().toDate();
+                notificationBody += " on " + date.toString();
+            }
+            
+            if (schedule.getNotes() != null && !schedule.getNotes().isEmpty()) {
+                notificationBody += ". Note: " + schedule.getNotes();
+            }
+            
+            Map<String, String> data = new HashMap<>();
+            data.put("scheduleId", schedule.getScheduleId());
+            data.put("type", "NEW_COLLECTION_SCHEDULE");
+            
+            notificationService.sendNotificationToBarangay(
+                schedule.getBarangayId(),
+                notificationTitle,
+                notificationBody,
+                data
+            );
 
             return ResponseEntity.ok(convertModelToDTO(schedule));
         } catch (DateTimeParseException e) {
@@ -188,6 +218,33 @@ public class CollectionScheduleService {
             firestore.collection("collection_schedules")
                     .document(scheduleId)
                     .set(schedule);
+                    
+            // Send notification about schedule update
+            String notificationTitle = "Garbage Collection Schedule Updated";
+            String notificationBody = "The " + schedule.getWasteType() + " collection schedule has been updated";
+            
+            if (schedule.isRecurring()) {
+                notificationBody += " to every " + schedule.getRecurringDay() + " at " + schedule.getRecurringTime();
+            } else if (schedule.getCollectionDateTime() != null) {
+                // Format date for better readability
+                Date date = schedule.getCollectionDateTime().toDate();
+                notificationBody += " to " + date.toString();
+            }
+            
+            if (schedule.getNotes() != null && !schedule.getNotes().isEmpty()) {
+                notificationBody += ". Note: " + schedule.getNotes();
+            }
+            
+            Map<String, String> data = new HashMap<>();
+            data.put("scheduleId", schedule.getScheduleId());
+            data.put("type", "UPDATED_COLLECTION_SCHEDULE");
+            
+            notificationService.sendNotificationToBarangay(
+                schedule.getBarangayId(),
+                notificationTitle,
+                notificationBody,
+                data
+            );
 
             return ResponseEntity.ok(convertModelToDTO(schedule));
         } catch (DateTimeParseException e) {
@@ -210,24 +267,42 @@ public class CollectionScheduleService {
             }
 
             // Check if schedule exists
-            CollectionSchedule schedule = firestore.collection("collection_schedules")
+            CollectionSchedule existingSchedule = firestore.collection("collection_schedules")
                     .document(scheduleId)
                     .get()
                     .get()
                     .toObject(CollectionSchedule.class);
 
-            if (schedule == null) {
+            if (existingSchedule == null) {
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "Schedule not found");
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
             }
+            
+            // Store barangay info before deletion for notification
+            String barangayId = existingSchedule.getBarangayId();
+            String wasteType = existingSchedule.getWasteType();
 
-            // Soft delete
-            schedule.setActive(false);
-            schedule.setUpdatedAt(Timestamp.now());
+            // Delete from Firestore
             firestore.collection("collection_schedules")
                     .document(scheduleId)
-                    .set(schedule);
+                    .delete()
+                    .get();
+                    
+            // Send notification about schedule cancellation
+            String notificationTitle = "Garbage Collection Schedule Cancelled";
+            String notificationBody = "The " + wasteType + " collection schedule has been cancelled.";
+            
+            Map<String, String> data = new HashMap<>();
+            data.put("scheduleId", scheduleId);
+            data.put("type", "CANCELLED_COLLECTION_SCHEDULE");
+            
+            notificationService.sendNotificationToBarangay(
+                barangayId,
+                notificationTitle,
+                notificationBody,
+                data
+            );
 
             Map<String, String> response = new HashMap<>();
             response.put("message", "Schedule removed successfully");
@@ -393,6 +468,76 @@ public class CollectionScheduleService {
             Map<String, String> error = new HashMap<>();
             error.put("error", "Failed to get recurring schedules: " + e.getMessage());
             return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    // Method to send collection reminders for today's schedules
+    public void sendTodayCollectionReminders() {
+        try {
+            // Get current date (without time)
+            LocalDate today = LocalDate.now();
+            
+            // For one-time schedules, find those happening today
+            List<CollectionSchedule> todaySchedules = firestore.collection("collection_schedules")
+                .whereEqualTo("isRecurring", false)
+                .whereEqualTo("isActive", true)
+                .get()
+                .get()
+                .toObjects(CollectionSchedule.class)
+                .stream()
+                .filter(schedule -> {
+                    if (schedule.getCollectionDateTime() == null) return false;
+                    LocalDate scheduleDate = LocalDate.ofInstant(
+                        schedule.getCollectionDateTime().toDate().toInstant(),
+                        ZoneId.systemDefault()
+                    );
+                    return scheduleDate.equals(today);
+                })
+                .collect(Collectors.toList());
+                
+            // For recurring schedules, find those happening on today's day of week
+            String dayOfWeek = today.getDayOfWeek().toString();
+            List<CollectionSchedule> recurringSchedules = firestore.collection("collection_schedules")
+                .whereEqualTo("isRecurring", true)
+                .whereEqualTo("isActive", true)
+                .whereEqualTo("recurringDay", dayOfWeek)
+                .get()
+                .get()
+                .toObjects(CollectionSchedule.class);
+                
+            // Combine the lists
+            List<CollectionSchedule> allTodaySchedules = new ArrayList<>();
+            allTodaySchedules.addAll(todaySchedules);
+            allTodaySchedules.addAll(recurringSchedules);
+            
+            // Send notifications for each schedule
+            for (CollectionSchedule schedule : allTodaySchedules) {
+                String notificationTitle = "Garbage Collection Today";
+                String notificationBody = schedule.getWasteType() + " collection is scheduled for today";
+                
+                if (schedule.isRecurring() && schedule.getRecurringTime() != null) {
+                    notificationBody += " at " + schedule.getRecurringTime();
+                }
+                
+                if (schedule.getNotes() != null && !schedule.getNotes().isEmpty()) {
+                    notificationBody += ". Note: " + schedule.getNotes();
+                }
+                
+                Map<String, String> data = new HashMap<>();
+                data.put("scheduleId", schedule.getScheduleId());
+                data.put("type", "TODAY_COLLECTION_REMINDER");
+                
+                notificationService.sendNotificationToBarangay(
+                    schedule.getBarangayId(),
+                    notificationTitle,
+                    notificationBody,
+                    data
+                );
+            }
+        } catch (Exception e) {
+            // Log error but don't throw exception to prevent disrupting scheduled tasks
+            System.err.println("Error sending collection reminders: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 } 

@@ -36,11 +36,13 @@ public class PaymentService {
 
     private final Firestore firestore;
     private final UserService userService;
+    private final NotificationService notificationService;
 
     @Autowired
-    public PaymentService(Firestore firestore, @Lazy UserService userService) {
+    public PaymentService(Firestore firestore, @Lazy UserService userService, NotificationService notificationService) {
         this.firestore = firestore;
         this.userService = userService;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -365,6 +367,18 @@ public class PaymentService {
             // Save the updated payment
             firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
 
+            // Send notification to the driver
+            Map<String, String> data = new HashMap<>();
+            data.put("paymentId", paymentId);
+            data.put("type", "DRIVER_ASSIGNMENT");
+            
+            notificationService.sendNotificationToUser(
+                driverId,
+                "New Job Assignment",
+                "You have been assigned to a new job order at " + payment.getAddress(),
+                data
+            );
+
             // Return the updated payment information
             return mapToResponseDTO(payment);
 
@@ -537,8 +551,27 @@ public class PaymentService {
                 payment.setStatus("COMPLETED");
             }
             
-            // Save the updated payment to Firestore
+            // Save the updated payment
             firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            
+            // Send notification to the customer if the status changed to Accepted
+            if ("Accepted".equalsIgnoreCase(jobOrderStatus) && !jobOrderStatus.equalsIgnoreCase(previousStatus)) {
+                if (payment.getCustomerEmail() != null) {
+                    User customer = userService.getUserByEmailOrUsername(payment.getCustomerEmail());
+                    if (customer != null) {
+                        Map<String, String> data = new HashMap<>();
+                        data.put("paymentId", paymentId);
+                        data.put("type", "JOB_ORDER_ACCEPTED");
+                        
+                        notificationService.sendNotificationToUser(
+                            customer.getUserId(),
+                            "Job Order Accepted",
+                            "Your job order has been accepted by the driver",
+                            data
+                        );
+                    }
+                }
+            }
             
             return mapToResponseDTO(payment);
             

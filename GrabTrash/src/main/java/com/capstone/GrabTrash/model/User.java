@@ -21,6 +21,7 @@ public class User {
     private String phoneNumber;
     private String barangayId;
     private String barangayName;
+    private String fcmToken;  // Firebase Cloud Messaging token for push notifications
 
     // Default constructor
     public User() {
@@ -166,6 +167,16 @@ public class User {
     @PropertyName("barangayName")
     public void setBarangayName(String barangayName) {
         this.barangayName = barangayName;
+    }
+    
+    @PropertyName("fcmToken")
+    public String getFcmToken() {
+        return fcmToken;
+    }
+
+    @PropertyName("fcmToken")
+    public void setFcmToken(String fcmToken) {
+        this.fcmToken = fcmToken;
     }
 
     @Override
