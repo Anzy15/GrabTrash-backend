@@ -171,6 +171,25 @@ public class UserService {
             Map<String, Object> response = new HashMap<>();
             response.put("token", token);
             response.put("userId", foundUser.getUserId());
+            
+            // If user is a private entity, include the entityId in the response
+            if ("private_entity".equalsIgnoreCase(foundUser.getRole())) {
+                try {
+                    // Find the private entity record for this user
+                    Query entityQuery = firestore.collection("private_entities")
+                        .whereEqualTo("userId", foundUser.getUserId());
+                    QuerySnapshot entitySnapshot = entityQuery.get().get();
+                    
+                    if (!entitySnapshot.isEmpty()) {
+                        PrivateEntity entity = entitySnapshot.getDocuments().get(0).toObject(PrivateEntity.class);
+                        response.put("entityId", entity.getEntityId());
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error fetching private entity data: " + e.getMessage());
+                    // Continue with login even if entity data can't be fetched
+                }
+            }
+            
             System.out.println("Login successful for user: " + user.getEmail());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
