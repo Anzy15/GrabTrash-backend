@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.UUID;
 
 @Service
 public class UserService {
@@ -954,12 +955,34 @@ public class UserService {
                 return ResponseEntity.badRequest().body(error);
             }
 
-            // Update the user's location
-            userToUpdate.setLatitude(request.getLatitude());
-            userToUpdate.setLongitude(request.getLongitude());
-
-            // Save to Firestore
-            firestore.collection("users").document(userToUpdate.getUserId()).set(userToUpdate).get();
+            // Find or create private entity record
+            DocumentReference privateEntityRef = null;
+            QuerySnapshot privateEntitySnapshot = firestore.collection("private_entities")
+                .whereEqualTo("userId", userToUpdate.getUserId())
+                .get().get();
+            
+            if (privateEntitySnapshot.isEmpty()) {
+                // Create new private entity record
+                PrivateEntity privateEntity = new PrivateEntity();
+                privateEntity.setEntityId(UUID.randomUUID().toString());
+                privateEntity.setUserId(userToUpdate.getUserId());
+                privateEntity.setEntityName(userToUpdate.getFirstName() + " " + userToUpdate.getLastName());
+                privateEntity.setLatitude(request.getLatitude());
+                privateEntity.setLongitude(request.getLongitude());
+                privateEntity.setEntityStatus("active");
+                
+                privateEntityRef = firestore.collection("private_entities").document(privateEntity.getEntityId());
+                privateEntityRef.set(privateEntity).get();
+            } else {
+                // Update existing private entity
+                DocumentSnapshot privateEntityDoc = privateEntitySnapshot.getDocuments().get(0);
+                PrivateEntity privateEntity = privateEntityDoc.toObject(PrivateEntity.class);
+                privateEntity.setLatitude(request.getLatitude());
+                privateEntity.setLongitude(request.getLongitude());
+                
+                privateEntityRef = firestore.collection("private_entities").document(privateEntity.getEntityId());
+                privateEntityRef.set(privateEntity).get();
+            }
 
             Map<String, String> response = new HashMap<>();
             response.put("message", "User location updated successfully");
@@ -1020,11 +1043,24 @@ public class UserService {
                 return ResponseEntity.badRequest().body(error);
             }
 
+            // Get location from private_entities collection
+            QuerySnapshot privateEntitySnapshot = firestore.collection("private_entities")
+                .whereEqualTo("userId", targetUser.getUserId())
+                .get().get();
+            
+            if (privateEntitySnapshot.isEmpty()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Location data not found for this user");
+                return ResponseEntity.notFound().build();
+            }
+            
+            PrivateEntity privateEntity = privateEntitySnapshot.getDocuments().get(0).toObject(PrivateEntity.class);
+
             // Create response with location data
             Map<String, Object> response = new HashMap<>();
             response.put("userId", targetUser.getUserId());
-            response.put("latitude", targetUser.getLatitude());
-            response.put("longitude", targetUser.getLongitude());
+            response.put("latitude", privateEntity.getLatitude());
+            response.put("longitude", privateEntity.getLongitude());
             response.put("username", targetUser.getUsername());
             response.put("firstName", targetUser.getFirstName());
             response.put("lastName", targetUser.getLastName());
@@ -1067,26 +1103,33 @@ public class UserService {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
             }
 
-            // Query all private entity users
-            Query query = firestore.collection("users")
-                .whereEqualTo("role", "private_entity");
-            
-            QuerySnapshot querySnapshot = query.get().get();
+            // Get all private entities with their locations
+            QuerySnapshot privateEntitiesSnapshot = firestore.collection("private_entities").get().get();
             List<Map<String, Object>> locations = new ArrayList<>();
             
-            for (QueryDocumentSnapshot document : querySnapshot.getDocuments()) {
-                User user = document.toObject(User.class);
-                if (user.getLatitude() != null && user.getLongitude() != null) {
-                    Map<String, Object> locationData = new HashMap<>();
-                    locationData.put("userId", user.getUserId());
-                    locationData.put("latitude", user.getLatitude());
-                    locationData.put("longitude", user.getLongitude());
-                    locationData.put("username", user.getUsername());
-                    locationData.put("firstName", user.getFirstName());
-                    locationData.put("lastName", user.getLastName());
-                    locationData.put("barangayName", user.getBarangayName());
-                    locationData.put("phoneNumber", user.getPhoneNumber());
-                    locations.add(locationData);
+            for (DocumentSnapshot document : privateEntitiesSnapshot.getDocuments()) {
+                PrivateEntity privateEntity = document.toObject(PrivateEntity.class);
+                
+                if (privateEntity.getLatitude() != null && privateEntity.getLongitude() != null) {
+                    try {
+                        // Get user details
+                        User user = getUserById(privateEntity.getUserId());
+                        if (user != null) {
+                            Map<String, Object> locationData = new HashMap<>();
+                            locationData.put("userId", user.getUserId());
+                            locationData.put("latitude", privateEntity.getLatitude());
+                            locationData.put("longitude", privateEntity.getLongitude());
+                            locationData.put("username", user.getUsername());
+                            locationData.put("firstName", user.getFirstName());
+                            locationData.put("lastName", user.getLastName());
+                            locationData.put("barangayName", user.getBarangayName());
+                            locationData.put("phoneNumber", user.getPhoneNumber());
+                            locationData.put("entityName", privateEntity.getEntityName());
+                            locations.add(locationData);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Error getting user details for private entity: " + privateEntity.getUserId());
+                    }
                 }
             }
 
