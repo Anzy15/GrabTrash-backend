@@ -67,6 +67,18 @@ public class PaymentService {
                 barangayId = paymentRequest.getBarangayId(); // allow override if provided
             }
 
+            // Determine truck size based on number of sacks
+            String truckSize = null;
+            if (paymentRequest.getNumberOfSacks() != null) {
+                if (paymentRequest.getNumberOfSacks() <= 20) {
+                    truckSize = "Small";
+                } else if (paymentRequest.getNumberOfSacks() <= 50) {
+                    truckSize = "Medium";
+                } else {
+                    truckSize = "Large";
+                }
+            }
+
             Payment payment = Payment.builder()
                     .id(paymentId)
                     .orderId(paymentRequest.getOrderId())
@@ -88,6 +100,8 @@ public class PaymentService {
                     .phoneNumber(phoneNumber)
                     .wasteType(paymentRequest.getWasteType())
                     .jobOrderStatus("Available")
+                    .numberOfSacks(paymentRequest.getNumberOfSacks())
+                    .truckSize(truckSize)
                     .build();
 
             // Save the payment to Firestore
@@ -110,6 +124,8 @@ public class PaymentService {
                     .phoneNumber(phoneNumber)
                     .wasteType(payment.getWasteType())
                     .jobOrderStatus(payment.getJobOrderStatus())
+                    .numberOfSacks(payment.getNumberOfSacks())
+                    .truckSize(payment.getTruckSize())
                     .message("Payment processed successfully")
                     .build();
 
@@ -269,6 +285,8 @@ public class PaymentService {
                 .wasteType(payment.getWasteType())
                 .truckId(payment.getTruckId())
                 .jobOrderStatus(payment.getJobOrderStatus())
+                .numberOfSacks(payment.getNumberOfSacks())
+                .truckSize(payment.getTruckSize())
                 .message("Payment retrieved successfully")
                 .build();
     }

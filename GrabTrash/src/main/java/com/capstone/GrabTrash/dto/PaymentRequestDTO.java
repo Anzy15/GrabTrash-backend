@@ -28,4 +28,5 @@ public class PaymentRequestDTO {
     private String notes;
     private String barangayId;
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
+    private Integer numberOfSacks; // Number of sacks for waste collection
 }

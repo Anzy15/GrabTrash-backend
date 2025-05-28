@@ -38,6 +38,8 @@ public class Payment {
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
     private String truckId;   // ID of the assigned truck
     private String jobOrderStatus;  // Status of the job order (NEW, IN_PROGRESS, COMPLETED, CANCELLED)
+    private Integer numberOfSacks; // Number of sacks for waste collection
+    private String truckSize;  // Size of the truck (Small, Medium, Large)
     
     // Pre-persist hook to set dates
     public void prePersist() {
@@ -85,5 +87,36 @@ public class Payment {
     @PropertyName("jobOrderStatus")
     public void setJobOrderStatus(String jobOrderStatus) {
         this.jobOrderStatus = jobOrderStatus;
+    }
+    
+    @PropertyName("numberOfSacks")
+    public Integer getNumberOfSacks() {
+        return numberOfSacks;
+    }
+
+    @PropertyName("numberOfSacks")
+    public void setNumberOfSacks(Integer numberOfSacks) {
+        this.numberOfSacks = numberOfSacks;
+        
+        // Automatically set truck size based on number of sacks
+        if (numberOfSacks != null) {
+            if (numberOfSacks <= 20) {
+                this.truckSize = "Small";
+            } else if (numberOfSacks <= 50) {
+                this.truckSize = "Medium";
+            } else {
+                this.truckSize = "Large";
+            }
+        }
+    }
+    
+    @PropertyName("truckSize")
+    public String getTruckSize() {
+        return truckSize;
+    }
+
+    @PropertyName("truckSize")
+    public void setTruckSize(String truckSize) {
+        this.truckSize = truckSize;
     }
 }
