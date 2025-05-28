@@ -6,6 +6,7 @@ import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
 import com.google.firebase.messaging.MulticastMessage;
+import com.google.firebase.messaging.BatchResponse;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.api.core.ApiFuture;
@@ -39,6 +40,7 @@ public class NotificationService {
      */
     public ResponseEntity<?> registerFcmToken(String userId, String fcmToken) {
         try {
+            log.info("Registering FCM token for user: {}", userId);
             Map<String, Object> updates = new HashMap<>();
             updates.put("fcmToken", fcmToken);
 
@@ -48,7 +50,7 @@ public class NotificationService {
             response.put("message", "FCM token registered successfully");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Error registering FCM token", e);
+            log.error("Error registering FCM token for user {}: {}", userId, e.getMessage(), e);
             Map<String, String> error = new HashMap<>();
             error.put("error", "Failed to register FCM token: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
@@ -56,16 +58,20 @@ public class NotificationService {
     }
 
     /**
-     * Send notification to a specific user
+     * Send notification to a specific user by FCM token
      */
-    public boolean sendNotification(String fcmToken, String title, String body, Map<String, String> data) {
+    public String sendNotification(String fcmToken, String title, String body, Map<String, String> data) {
         try {
+            log.info("Sending notification to token: {}", fcmToken);
+            
+            Notification notification = Notification.builder()
+                    .setTitle(title)
+                    .setBody(body)
+                    .build();
+
             Message.Builder messageBuilder = Message.builder()
                     .setToken(fcmToken)
-                    .setNotification(Notification.builder()
-                            .setTitle(title)
-                            .setBody(body)
-                            .build());
+                    .setNotification(notification);
 
             if (data != null && !data.isEmpty()) {
                 messageBuilder.putAllData(data);
@@ -73,10 +79,10 @@ public class NotificationService {
 
             String response = firebaseMessaging.send(messageBuilder.build());
             log.info("Successfully sent notification: {}", response);
-            return true;
+            return response;
         } catch (FirebaseMessagingException e) {
-            log.error("Failed to send notification", e);
-            return false;
+            log.error("Failed to send notification to token: {}, error: {}", fcmToken, e.getMessage(), e);
+            return null;
         }
     }
 
@@ -85,6 +91,8 @@ public class NotificationService {
      */
     public int sendNotificationToRole(String role, String title, String body, Map<String, String> data) {
         try {
+            log.info("Sending notification to users with role: {}", role);
+            
             ApiFuture<QuerySnapshot> future = firestore.collection("users")
                     .whereEqualTo("role", role)
                     .get();
@@ -101,21 +109,8 @@ public class NotificationService {
                 return 0;
             }
 
-            MulticastMessage.Builder messageBuilder = MulticastMessage.builder()
-                    .addAllTokens(tokens)
-                    .setNotification(Notification.builder()
-                            .setTitle(title)
-                            .setBody(body)
-                            .build());
-
-            if (data != null && !data.isEmpty()) {
-                messageBuilder.putAllData(data);
-            }
-
-            int successCount = firebaseMessaging.sendMulticast(messageBuilder.build()).getSuccessCount();
-            log.info("Successfully sent {} notifications to users with role: {}", successCount, role);
-            return successCount;
-        } catch (FirebaseMessagingException | InterruptedException | ExecutionException e) {
+            return sendMulticastNotification(tokens, title, body, data);
+        } catch (InterruptedException | ExecutionException e) {
             log.error("Failed to send notifications to users with role: {}", role, e);
             return 0;
         }
@@ -126,6 +121,8 @@ public class NotificationService {
      */
     public int sendNotificationToBarangay(String barangayId, String title, String body, Map<String, String> data) {
         try {
+            log.info("Sending notification to users in barangay: {}", barangayId);
+            
             ApiFuture<QuerySnapshot> future = firestore.collection("users")
                     .whereEqualTo("barangayId", barangayId)
                     .whereEqualTo("role", "customer")
@@ -134,6 +131,7 @@ public class NotificationService {
             List<String> tokens = new ArrayList<>();
             for (User user : future.get().toObjects(User.class)) {
                 if (user.getFcmToken() != null && !user.getFcmToken().isEmpty()) {
+                    log.debug("Found token for user: {}", user.getUserId());
                     tokens.add(user.getFcmToken());
                 }
             }
@@ -143,22 +141,39 @@ public class NotificationService {
                 return 0;
             }
 
+            return sendMulticastNotification(tokens, title, body, data);
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Failed to send notifications to users in barangay: {}", barangayId, e);
+            return 0;
+        }
+    }
+
+    /**
+     * Send notification to multiple devices using their FCM tokens
+     */
+    private int sendMulticastNotification(List<String> tokens, String title, String body, Map<String, String> data) {
+        try {
+            log.info("Sending multicast notification to {} devices", tokens.size());
+            
+            Notification notification = Notification.builder()
+                    .setTitle(title)
+                    .setBody(body)
+                    .build();
+
             MulticastMessage.Builder messageBuilder = MulticastMessage.builder()
                     .addAllTokens(tokens)
-                    .setNotification(Notification.builder()
-                            .setTitle(title)
-                            .setBody(body)
-                            .build());
+                    .setNotification(notification);
 
             if (data != null && !data.isEmpty()) {
                 messageBuilder.putAllData(data);
             }
 
-            int successCount = firebaseMessaging.sendMulticast(messageBuilder.build()).getSuccessCount();
-            log.info("Successfully sent {} notifications to users in barangay: {}", successCount, barangayId);
-            return successCount;
-        } catch (FirebaseMessagingException | InterruptedException | ExecutionException e) {
-            log.error("Failed to send notifications to users in barangay: {}", barangayId, e);
+            BatchResponse response = firebaseMessaging.sendMulticast(messageBuilder.build());
+            log.info("Successfully sent multicast notification to {} devices, {} successful", 
+                    tokens.size(), response.getSuccessCount());
+            return response.getSuccessCount();
+        } catch (FirebaseMessagingException e) {
+            log.error("Failed to send multicast notification, error: {}", e.getMessage(), e);
             return 0;
         }
     }
@@ -168,14 +183,22 @@ public class NotificationService {
      */
     public boolean sendNotificationToUser(String userId, String title, String body, Map<String, String> data) {
         try {
+            log.info("Sending notification to user: {}", userId);
+            
             User user = firestore.collection("users").document(userId).get().get().toObject(User.class);
             
-            if (user == null || user.getFcmToken() == null || user.getFcmToken().isEmpty()) {
-                log.warn("User not found or has no FCM token: {}", userId);
+            if (user == null) {
+                log.warn("User not found: {}", userId);
                 return false;
             }
             
-            return sendNotification(user.getFcmToken(), title, body, data);
+            if (user.getFcmToken() == null || user.getFcmToken().isEmpty()) {
+                log.warn("User has no FCM token: {}", userId);
+                return false;
+            }
+            
+            String result = sendNotification(user.getFcmToken(), title, body, data);
+            return result != null;
         } catch (InterruptedException | ExecutionException e) {
             log.error("Failed to send notification to user: {}", userId, e);
             return false;

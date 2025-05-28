@@ -24,9 +24,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.time.*;
 import java.util.ArrayList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class CollectionScheduleService {
+
+    private static final Logger log = LoggerFactory.getLogger(CollectionScheduleService.class);
 
     @Autowired
     private Firestore firestore;
@@ -474,10 +478,14 @@ public class CollectionScheduleService {
     // Method to send collection reminders for today's schedules
     public void sendTodayCollectionReminders() {
         try {
+            log.info("Starting to send today's collection reminders");
+            
             // Get current date (without time)
             LocalDate today = LocalDate.now();
+            log.debug("Today's date: {}", today);
             
             // For one-time schedules, find those happening today
+            log.debug("Looking for one-time schedules for today");
             List<CollectionSchedule> todaySchedules = firestore.collection("collection_schedules")
                 .whereEqualTo("isRecurring", false)
                 .whereEqualTo("isActive", true)
@@ -494,9 +502,13 @@ public class CollectionScheduleService {
                     return scheduleDate.equals(today);
                 })
                 .collect(Collectors.toList());
+            
+            log.debug("Found {} one-time schedules for today", todaySchedules.size());
                 
             // For recurring schedules, find those happening on today's day of week
             String dayOfWeek = today.getDayOfWeek().toString();
+            log.debug("Looking for recurring schedules for day of week: {}", dayOfWeek);
+            
             List<CollectionSchedule> recurringSchedules = firestore.collection("collection_schedules")
                 .whereEqualTo("isRecurring", true)
                 .whereEqualTo("isActive", true)
@@ -504,14 +516,21 @@ public class CollectionScheduleService {
                 .get()
                 .get()
                 .toObjects(CollectionSchedule.class);
+            
+            log.debug("Found {} recurring schedules for today", recurringSchedules.size());
                 
             // Combine the lists
             List<CollectionSchedule> allTodaySchedules = new ArrayList<>();
             allTodaySchedules.addAll(todaySchedules);
             allTodaySchedules.addAll(recurringSchedules);
             
+            log.info("Total schedules for today: {}", allTodaySchedules.size());
+            
             // Send notifications for each schedule
             for (CollectionSchedule schedule : allTodaySchedules) {
+                log.debug("Preparing notification for schedule: {}, barangay: {}", 
+                    schedule.getScheduleId(), schedule.getBarangayId());
+                
                 String notificationTitle = "Garbage Collection Today";
                 String notificationBody = schedule.getWasteType() + " collection is scheduled for today";
                 
@@ -527,17 +546,21 @@ public class CollectionScheduleService {
                 data.put("scheduleId", schedule.getScheduleId());
                 data.put("type", "TODAY_COLLECTION_REMINDER");
                 
-                notificationService.sendNotificationToBarangay(
+                int sentCount = notificationService.sendNotificationToBarangay(
                     schedule.getBarangayId(),
                     notificationTitle,
                     notificationBody,
                     data
                 );
+                
+                log.info("Sent {} notifications for schedule: {} in barangay: {}", 
+                    sentCount, schedule.getScheduleId(), schedule.getBarangayId());
             }
+            
+            log.info("Completed sending today's collection reminders");
         } catch (Exception e) {
             // Log error but don't throw exception to prevent disrupting scheduled tasks
-            System.err.println("Error sending collection reminders: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error sending collection reminders: {}", e.getMessage(), e);
         }
     }
 } 

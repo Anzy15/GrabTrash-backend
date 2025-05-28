@@ -513,11 +513,16 @@ public class PaymentService {
      */
     public PaymentResponseDTO updateJobOrderStatus(String paymentId, String jobOrderStatus) {
         try {
+            log.info("Updating job order status for payment ID: {} to status: {}", paymentId, jobOrderStatus);
+            
             // Get the payment
             Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
             if (payment == null) {
+                log.error("Payment not found with ID: {}", paymentId);
                 throw new RuntimeException("Payment not found with ID: " + paymentId);
             }
+            
+            log.debug("Found payment: {}, current status: {}", payment.getId(), payment.getJobOrderStatus());
             
             // Security check: verify the current user is the driver assigned to this job
             // This would typically use SecurityContextHolder to get the current user
@@ -525,11 +530,13 @@ public class PaymentService {
             
             // Validate job order status
             if (jobOrderStatus == null || jobOrderStatus.isEmpty()) {
+                log.error("Job order status cannot be empty for payment ID: {}", paymentId);
                 throw new RuntimeException("Job order status cannot be empty");
             }
             
             // Store previous status for comparison
             String previousStatus = payment.getJobOrderStatus();
+            log.debug("Previous job order status: {}", previousStatus);
             
             // Update job order status
             payment.setJobOrderStatus(jobOrderStatus);
@@ -538,6 +545,8 @@ public class PaymentService {
             // If job is marked as COMPLETED, release the truck (set to available)
             if ("COMPLETED".equalsIgnoreCase(jobOrderStatus) && payment.getTruckId() != null) {
                 String truckId = payment.getTruckId();
+                log.debug("Job marked as COMPLETED, releasing truck: {}", truckId);
+                
                 Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
                 
                 if (truck != null) {
@@ -545,6 +554,7 @@ public class PaymentService {
                     truck.setStatus("AVAILABLE");
                     truck.setUpdatedAt(new Date());
                     firestore.collection("trucks").document(truckId).set(truck);
+                    log.debug("Updated truck status to AVAILABLE");
                 }
                 
                 // Also update payment status
@@ -553,30 +563,47 @@ public class PaymentService {
             
             // Save the updated payment
             firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            log.info("Successfully updated job order status to: {} for payment ID: {}", jobOrderStatus, paymentId);
             
             // Send notification to the customer if the status changed to Accepted
             if ("Accepted".equalsIgnoreCase(jobOrderStatus) && !jobOrderStatus.equalsIgnoreCase(previousStatus)) {
+                log.info("Status changed to Accepted, sending notification to customer");
+                
                 if (payment.getCustomerEmail() != null) {
+                    log.debug("Looking up customer by email: {}", payment.getCustomerEmail());
                     User customer = userService.getUserByEmailOrUsername(payment.getCustomerEmail());
+                    
                     if (customer != null) {
+                        log.debug("Found customer: {}, userId: {}, fcmToken: {}", 
+                            customer.getEmail(), customer.getUserId(), 
+                            customer.getFcmToken() != null ? "present" : "missing");
+                        
                         Map<String, String> data = new HashMap<>();
                         data.put("paymentId", paymentId);
                         data.put("type", "JOB_ORDER_ACCEPTED");
                         
-                        notificationService.sendNotificationToUser(
+                        boolean notificationSent = notificationService.sendNotificationToUser(
                             customer.getUserId(),
                             "Job Order Accepted",
                             "Your job order has been accepted by the driver",
                             data
                         );
+                        
+                        log.info("Notification sent to customer: {}", notificationSent ? "success" : "failed");
+                    } else {
+                        log.warn("Customer not found for email: {}", payment.getCustomerEmail());
                     }
+                } else {
+                    log.warn("No customer email associated with payment: {}", paymentId);
                 }
+            } else {
+                log.debug("No notification needed. Status: {}, Previous: {}", jobOrderStatus, previousStatus);
             }
             
             return mapToResponseDTO(payment);
             
         } catch (InterruptedException | ExecutionException e) {
-            log.error("Error updating job order status", e);
+            log.error("Error updating job order status for payment ID: {}", paymentId, e);
             throw new RuntimeException("Failed to update job order status: " + e.getMessage());
         }
     }
