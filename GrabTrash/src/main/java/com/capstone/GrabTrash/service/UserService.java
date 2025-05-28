@@ -170,6 +170,7 @@ public class UserService {
 
             Map<String, Object> response = new HashMap<>();
             response.put("token", token);
+            response.put("userId", foundUser.getUserId());
             System.out.println("Login successful for user: " + user.getEmail());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
