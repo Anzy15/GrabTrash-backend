@@ -1,8 +1,8 @@
 package com.capstone.GrabTrash.service;
 
+import com.capstone.GrabTrash.dto.PrivateEntityUpdateRequest;
 import com.capstone.GrabTrash.model.PrivateEntity;
 import com.capstone.GrabTrash.model.User;
-import com.capstone.GrabTrash.dto.PrivateEntityUpdateRequest;
 import com.google.cloud.firestore.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -155,7 +155,7 @@ public class PrivateEntityService {
     }
 
     /**
-     * Get all private entities (admin only)
+     * Get all private entities (accessible by admin, driver, and private_entity)
      */
     public ResponseEntity<?> getAllPrivateEntities() {
         try {
@@ -176,10 +176,13 @@ public class PrivateEntityService {
                 return ResponseEntity.badRequest().body(error);
             }
 
-            // Check if the user is an admin
-            if (!"admin".equalsIgnoreCase(currentUser.getRole())) {
+            // Check if the user has appropriate role
+            String role = currentUser.getRole();
+            if (!"admin".equalsIgnoreCase(role) && 
+                !"driver".equalsIgnoreCase(role) && 
+                !"private_entity".equalsIgnoreCase(role)) {
                 Map<String, String> error = new HashMap<>();
-                error.put("error", "Access denied. Admin role required.");
+                error.put("error", "Access denied. Admin, driver, or private_entity role required.");
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
             }
 

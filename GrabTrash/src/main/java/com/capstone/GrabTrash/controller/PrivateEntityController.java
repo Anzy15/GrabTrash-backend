@@ -36,7 +36,7 @@ public class PrivateEntityController {
     }
 
     /**
-     * Get all private entities (admin only)
+     * Get all private entities (accessible by admin, driver, and private_entity)
      */
     @GetMapping
     public ResponseEntity<?> getAllPrivateEntities() {
