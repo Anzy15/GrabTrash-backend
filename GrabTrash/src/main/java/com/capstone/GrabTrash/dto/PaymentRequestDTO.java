@@ -21,12 +21,11 @@ public class PaymentRequestDTO {
     private Double latitude;
     private Double longitude;
     private Double amount;
-    private Double tax;
     private Double totalAmount;
     private String paymentMethod;
     private String paymentReference;
     private String notes;
     private String barangayId;
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
-    private Integer numberOfSacks; // Number of sacks for waste collection
+    private String truckId;    // ID of the selected truck
 }

@@ -15,11 +15,9 @@ import java.util.List;
 
 /**
  * REST Controller for handling truck-related endpoints
- * All endpoints require JWT authentication with admin role
  */
 @RestController
 @RequestMapping("/api/trucks")
-@PreAuthorize("hasRole('ADMIN')")
 public class TruckController {
 
     private final TruckService truckService;
@@ -46,11 +44,11 @@ public class TruckController {
 
     /**
      * Get all trucks
-     * Requires JWT authentication with admin role
+     * Accessible to all authenticated users
      * @return List of all trucks
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<TruckResponseDTO>> getAllTrucks() {
         List<TruckResponseDTO> trucks = truckService.getAllTrucks();
         return ResponseEntity.ok(trucks);
@@ -81,6 +79,39 @@ public class TruckController {
     public ResponseEntity<TruckResponseDTO> updateTruck(@PathVariable String truckId, @RequestBody TruckRequestDTO truckRequest) {
         TruckResponseDTO response = truckService.updateTruck(truckId, truckRequest);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Update truck price
+     * Requires JWT authentication with admin role
+     * @param truckId Truck ID
+     * @param truckRequest Updated truck information with price
+     * @return Updated truck response
+     */
+    @PutMapping("/{truckId}/price")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TruckResponseDTO> updateTruckPrice(@PathVariable String truckId, @RequestBody TruckRequestDTO truckRequest) {
+        try {
+            // Get the existing truck first
+            TruckResponseDTO existingTruck = truckService.getTruckById(truckId);
+            
+            // Create a new request with only the price updated
+            TruckRequestDTO priceUpdateRequest = TruckRequestDTO.builder()
+                .size(existingTruck.getSize())
+                .wasteType(existingTruck.getWasteType())
+                .status(existingTruck.getStatus())
+                .make(existingTruck.getMake())
+                .model(existingTruck.getModel())
+                .plateNumber(existingTruck.getPlateNumber())
+                .truckPrice(truckRequest.getTruckPrice())
+                .build();
+            
+            // Update with all fields preserved
+            TruckResponseDTO response = truckService.updateTruck(truckId, priceUpdateRequest);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     /**

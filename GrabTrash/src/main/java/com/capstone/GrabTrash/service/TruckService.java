@@ -52,6 +52,7 @@ public class TruckService {
                     .make(truckRequest.getMake())
                     .model(truckRequest.getModel())
                     .plateNumber(truckRequest.getPlateNumber())
+                    .truckPrice(truckRequest.getTruckPrice())
                     .createdAt(new Date())
                     .updatedAt(new Date())
                     .build();
@@ -142,6 +143,11 @@ public class TruckService {
             
             if (truckRequest.getPlateNumber() != null) {
                 existingTruck.setPlateNumber(truckRequest.getPlateNumber());
+            }
+            
+            // Update truckPrice if provided
+            if (truckRequest.getTruckPrice() != null) {
+                existingTruck.setTruckPrice(truckRequest.getTruckPrice());
             }
             
             existingTruck.setUpdatedAt(new Date());
@@ -235,6 +241,7 @@ public class TruckService {
                 .make(truck.getMake())
                 .model(truck.getModel())
                 .plateNumber(truck.getPlateNumber())
+                .truckPrice(truck.getTruckPrice())
                 .createdAt(truck.getCreatedAt())
                 .updatedAt(truck.getUpdatedAt())
                 .message(message)

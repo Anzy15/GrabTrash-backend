@@ -209,18 +209,6 @@ public class PaymentService {
                 barangayId = paymentRequest.getBarangayId(); // allow override if provided
             }
 
-            // Determine truck size based on number of sacks
-            String truckSize = null;
-            if (paymentRequest.getNumberOfSacks() != null) {
-                if (paymentRequest.getNumberOfSacks() <= 20) {
-                    truckSize = "Small";
-                } else if (paymentRequest.getNumberOfSacks() <= 50) {
-                    truckSize = "Medium";
-                } else {
-                    truckSize = "Large";
-                }
-            }
-
             Payment payment = Payment.builder()
                     .id(paymentId)
                     .orderId(paymentRequest.getOrderId())
@@ -230,7 +218,6 @@ public class PaymentService {
                     .latitude(paymentRequest.getLatitude())
                     .longitude(paymentRequest.getLongitude())
                     .amount(paymentRequest.getAmount())
-                    .tax(paymentRequest.getTax())
                     .totalAmount(paymentRequest.getTotalAmount())
                     .paymentMethod(paymentRequest.getPaymentMethod())
                     .paymentReference(paymentRequest.getPaymentReference())
@@ -241,9 +228,8 @@ public class PaymentService {
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
                     .wasteType(paymentRequest.getWasteType())
+                    .truckId(paymentRequest.getTruckId())
                     .jobOrderStatus("Available")
-                    .numberOfSacks(paymentRequest.getNumberOfSacks())
-                    .truckSize(truckSize)
                     .build();
 
             // Save the payment to Firestore
@@ -260,15 +246,15 @@ public class PaymentService {
                     .latitude(payment.getLatitude())
                     .longitude(payment.getLongitude())
                     .amount(payment.getAmount())
+                    .totalAmount(payment.getTotalAmount())
                     .paymentMethod(payment.getPaymentMethod())
                     .paymentReference(payment.getPaymentReference())
                     .createdAt(payment.getCreatedAt())
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
                     .wasteType(payment.getWasteType())
+                    .truckId(payment.getTruckId())
                     .jobOrderStatus(payment.getJobOrderStatus())
-                    .numberOfSacks(payment.getNumberOfSacks())
-                    .truckSize(payment.getTruckSize())
                     .message("Payment processed successfully")
                     .build();
 
@@ -415,7 +401,6 @@ public class PaymentService {
                 .paymentMethod(payment.getPaymentMethod())
                 .paymentReference(payment.getPaymentReference())
                 .amount(payment.getAmount())
-                .tax(payment.getTax() != null ? payment.getTax() : 0.0)
                 .totalAmount(payment.getTotalAmount() != null ? payment.getTotalAmount() : payment.getAmount())
                 .createdAt(payment.getCreatedAt())
                 .barangayId(payment.getBarangayId())
@@ -429,8 +414,6 @@ public class PaymentService {
                 .wasteType(payment.getWasteType())
                 .truckId(payment.getTruckId())
                 .jobOrderStatus(payment.getJobOrderStatus())
-                .numberOfSacks(payment.getNumberOfSacks())
-                .truckSize(payment.getTruckSize())
                 .message("Payment retrieved successfully")
                 .build();
     }

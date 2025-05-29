@@ -23,6 +23,7 @@ public class Truck {
     private String make;   // Truck manufacturer (e.g., Toyota, Isuzu, etc.)
     private String model;  // Truck model (e.g., Dyna, Elf, etc.)
     private String plateNumber; // License plate number
+    private Double truckPrice; // Price for the truck based on size
     private Date createdAt;
     private Date updatedAt;
     
@@ -102,6 +103,16 @@ public class Truck {
     @PropertyName("plateNumber")
     public void setPlateNumber(String plateNumber) {
         this.plateNumber = plateNumber;
+    }
+
+    @PropertyName("truckPrice")
+    public Double getTruckPrice() {
+        return truckPrice;
+    }
+
+    @PropertyName("truckPrice")
+    public void setTruckPrice(Double truckPrice) {
+        this.truckPrice = truckPrice;
     }
 
     @PropertyName("createdAt")
