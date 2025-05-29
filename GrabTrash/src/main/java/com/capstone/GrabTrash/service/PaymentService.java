@@ -414,6 +414,7 @@ public class PaymentService {
                 .wasteType(payment.getWasteType())
                 .truckId(payment.getTruckId())
                 .jobOrderStatus(payment.getJobOrderStatus())
+                .isDelivered(payment.getIsDelivered())
                 .message("Payment retrieved successfully")
                 .build();
     }
@@ -778,6 +779,39 @@ public class PaymentService {
             default:
                 log.warn("Unknown job order status: {}, using as-is: {}", status, normalized);
                 return normalized;
+        }
+    }
+
+    /**
+     * Update the delivery status of a payment
+     * @param paymentId Payment ID
+     * @param isDelivered New delivery status
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO updateDeliveryStatus(String paymentId, Boolean isDelivered) {
+        try {
+            log.info("Updating delivery status for payment ID: {} to: {}", paymentId, isDelivered);
+            
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                log.error("Payment not found with ID: {}", paymentId);
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Update the delivery status
+            payment.setIsDelivered(isDelivered);
+            payment.setUpdatedAt(new Date());
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            log.info("Successfully updated delivery status to: {} for payment ID: {}", isDelivered, paymentId);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error updating delivery status for payment ID: {}", paymentId, e);
+            throw new RuntimeException("Failed to update delivery status: " + e.getMessage());
         }
     }
 }

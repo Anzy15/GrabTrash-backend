@@ -37,6 +37,7 @@ public class Payment {
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
     private String truckId;   // ID of the assigned truck
     private String jobOrderStatus;  // Status of the job order (NEW, IN_PROGRESS, COMPLETED, CANCELLED)
+    private Boolean isDelivered;  // Whether the waste has been delivered to the disposal facility
     
     // Pre-persist hook to set dates
     public void prePersist() {
@@ -44,6 +45,11 @@ public class Payment {
             createdAt = new Date();
         }
         updatedAt = new Date();
+        
+        // Set default value for isDelivered if null
+        if (isDelivered == null) {
+            isDelivered = false;
+        }
     }
 
     @PropertyName("driverId")
@@ -84,5 +90,15 @@ public class Payment {
     @PropertyName("jobOrderStatus")
     public void setJobOrderStatus(String jobOrderStatus) {
         this.jobOrderStatus = jobOrderStatus;
+    }
+    
+    @PropertyName("isDelivered")
+    public Boolean getIsDelivered() {
+        return isDelivered != null ? isDelivered : false;
+    }
+
+    @PropertyName("isDelivered")
+    public void setIsDelivered(Boolean isDelivered) {
+        this.isDelivered = isDelivered;
     }
 }

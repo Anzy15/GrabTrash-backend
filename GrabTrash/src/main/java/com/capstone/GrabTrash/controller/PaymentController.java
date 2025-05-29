@@ -4,9 +4,11 @@ import com.capstone.GrabTrash.dto.DashboardStatsDTO;
 import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
 import com.capstone.GrabTrash.dto.DriverAssignmentDTO;
+import com.capstone.GrabTrash.dto.DeliveryStatusUpdateDTO;
 import com.capstone.GrabTrash.service.PaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -128,5 +130,25 @@ public class PaymentController {
     public ResponseEntity<List<PaymentResponseDTO>> getPaymentsByDriverId(@PathVariable String driverId) {
         List<PaymentResponseDTO> payments = paymentService.getPaymentsByDriverId(driverId);
         return ResponseEntity.ok(payments);
+    }
+
+    /**
+     * Update the delivery status of a payment
+     * Requires JWT authentication with admin or driver role
+     * @param paymentId Payment ID
+     * @param updateRequest Delivery status update request
+     * @return Updated payment response
+     */
+    @PutMapping("/{paymentId}/delivery-status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER')")
+    public ResponseEntity<PaymentResponseDTO> updateDeliveryStatus(
+            @PathVariable String paymentId,
+            @RequestBody DeliveryStatusUpdateDTO updateRequest) {
+        
+        PaymentResponseDTO updatedPayment = paymentService.updateDeliveryStatus(
+                paymentId, 
+                updateRequest.getIsDelivered());
+        
+        return ResponseEntity.ok(updatedPayment);
     }
 }
