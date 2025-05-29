@@ -28,6 +28,7 @@ public class PaymentResponseDTO {
     private double longitude;
     private String phoneNumber;
     private String customerName;
+    private String customerEmail;
     private String driverId;
     private double amount;
     private double tax;

@@ -13,5 +13,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class JobOrderStatusUpdateDTO {
-    private String jobOrderStatus; // NEW, IN_PROGRESS, COMPLETED, CANCELLED
+    private String jobOrderStatus; // NEW, ACCEPTED, IN_PROGRESS, COMPLETED, CANCELLED
 } 

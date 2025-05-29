@@ -359,4 +359,46 @@ public class NotificationService {
             return false;
         }
     }
+
+    /**
+     * Check if a user has a valid FCM token
+     * @param userId User ID to check
+     * @return true if the user has a valid FCM token, false otherwise
+     */
+    public boolean hasValidFcmToken(String userId) {
+        try {
+            log.debug("Checking if user {} has a valid FCM token", userId);
+            
+            if (userId == null || userId.isEmpty()) {
+                log.warn("User ID is null or empty");
+                return false;
+            }
+            
+            User user = firestore.collection("users").document(userId).get().get().toObject(User.class);
+            
+            if (user == null) {
+                log.warn("User not found with ID: {}", userId);
+                return false;
+            }
+            
+            String fcmToken = user.getFcmToken();
+            
+            if (fcmToken == null || fcmToken.isEmpty()) {
+                log.warn("User {} does not have an FCM token", userId);
+                return false;
+            }
+            
+            // Validate token format - basic check
+            if (!fcmToken.contains(":")) {
+                log.warn("User {} has an invalid FCM token format: {}", userId, fcmToken);
+                return false;
+            }
+            
+            log.debug("User {} has a valid FCM token", userId);
+            return true;
+        } catch (Exception e) {
+            log.error("Error checking FCM token for user {}: {}", userId, e.getMessage(), e);
+            return false;
+        }
+    }
 } 

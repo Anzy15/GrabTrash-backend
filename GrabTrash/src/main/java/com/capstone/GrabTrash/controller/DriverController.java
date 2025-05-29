@@ -2,6 +2,8 @@ package com.capstone.GrabTrash.controller;
 
 import com.capstone.GrabTrash.dto.JobOrderStatusUpdateDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
+import com.capstone.GrabTrash.model.User;
+import com.capstone.GrabTrash.service.NotificationService;
 import com.capstone.GrabTrash.service.PaymentService;
 import com.capstone.GrabTrash.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * REST Controller for handling driver-related endpoints
@@ -26,11 +30,13 @@ public class DriverController {
 
     private final PaymentService paymentService;
     private final UserService userService;
+    private final NotificationService notificationService;
 
     @Autowired
-    public DriverController(PaymentService paymentService, UserService userService) {
+    public DriverController(PaymentService paymentService, UserService userService, NotificationService notificationService) {
         this.paymentService = paymentService;
         this.userService = userService;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -108,6 +114,99 @@ public class DriverController {
         }
         
         // Update the job order status
+        PaymentResponseDTO response = paymentService.updateJobOrderStatus(
+                paymentId, 
+                statusUpdate.getJobOrderStatus());
+                
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Debug endpoint to test notification for job order status change
+     */
+    @PostMapping("/debug/job/{paymentId}/notification")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DRIVER')")
+    public ResponseEntity<?> testJobOrderNotification(
+            @PathVariable String paymentId) {
+        
+        try {
+            // Get the payment
+            PaymentResponseDTO payment = paymentService.getPaymentById(paymentId);
+            if (payment == null) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            // Get customer by email instead of name
+            User customer = userService.getUserByEmailOrUsername(payment.getCustomerEmail());
+            if (customer == null) {
+                Map<String, String> response = new HashMap<>();
+                response.put("error", "Customer not found with email: " + payment.getCustomerEmail());
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            // Check if customer has FCM token
+            if (customer.getFcmToken() == null || customer.getFcmToken().isEmpty()) {
+                Map<String, String> response = new HashMap<>();
+                response.put("error", "Customer does not have FCM token registered");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            // Send test notification
+            Map<String, String> data = new HashMap<>();
+            data.put("paymentId", paymentId);
+            data.put("type", "JOB_ORDER_ACCEPTED");
+            
+            boolean notificationSent = notificationService.sendNotificationToUser(
+                customer.getUserId(),
+                "Test Notification",
+                "This is a test notification for job order: " + paymentId,
+                data
+            );
+            
+            Map<String, Object> responseMap = new HashMap<>();
+            responseMap.put("success", notificationSent);
+            responseMap.put("customerEmail", payment.getCustomerEmail());
+            responseMap.put("customerId", customer.getUserId());
+            responseMap.put("fcmToken", customer.getFcmToken());
+            
+            return ResponseEntity.ok(responseMap);
+        } catch (Exception e) {
+            Map<String, String> response = new HashMap<>();
+            response.put("error", "Failed to send test notification: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    /**
+     * Convenience endpoint to specifically accept a job order
+     * Requires JWT authentication with driver role
+     * @param paymentId Payment/Job order ID
+     * @return Updated payment/job order
+     */
+    @PostMapping("/job/{paymentId}/accept")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<PaymentResponseDTO> acceptJobOrder(@PathVariable String paymentId) {
+        // Get the current authenticated driver's email
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String driverEmail = authentication.getName();
+        
+        // Get driver's ID from email
+        String driverId = getUserIdFromEmail(driverEmail);
+        
+        // Get the payment
+        PaymentResponseDTO payment = paymentService.getPaymentById(paymentId);
+        
+        // Verify the payment is assigned to this driver
+        if (!driverId.equals(payment.getDriverId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, 
+                "You are not authorized to update this job order. It is assigned to another driver.");
+        }
+        
+        // Create a DTO with "Accepted" status
+        JobOrderStatusUpdateDTO statusUpdate = new JobOrderStatusUpdateDTO();
+        statusUpdate.setJobOrderStatus("Accepted");
+        
+        // Update the job order status to "Accepted"
         PaymentResponseDTO response = paymentService.updateJobOrderStatus(
                 paymentId, 
                 statusUpdate.getJobOrderStatus());
