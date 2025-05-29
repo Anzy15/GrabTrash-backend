@@ -8,7 +8,9 @@ import com.capstone.GrabTrash.model.User;
 import com.capstone.GrabTrash.model.Truck;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
+import com.google.cloud.firestore.DocumentChange;
 import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.ListenerRegistration;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QuerySnapshot;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -37,12 +40,149 @@ public class PaymentService {
     private final Firestore firestore;
     private final UserService userService;
     private final NotificationService notificationService;
+    private ListenerRegistration paymentsListener;
 
     @Autowired
     public PaymentService(Firestore firestore, @Lazy UserService userService, NotificationService notificationService) {
         this.firestore = firestore;
         this.userService = userService;
         this.notificationService = notificationService;
+        
+        // Initialize the Firestore listener for payments collection
+        initializePaymentsListener();
+    }
+
+    /**
+     * Initialize Firestore listener for payments collection to automatically detect status changes
+     */
+    private void initializePaymentsListener() {
+        try {
+            log.info("Initializing Firestore listener for payments collection");
+            
+            // Create a listener for the payments collection
+            paymentsListener = firestore.collection(COLLECTION_NAME)
+                .addSnapshotListener((snapshots, e) -> {
+                    if (e != null) {
+                        log.error("Error listening for payment changes: {}", e.getMessage(), e);
+                        return;
+                    }
+                    
+                    if (snapshots == null || snapshots.isEmpty()) {
+                        log.debug("No payments found in snapshot");
+                        return;
+                    }
+                    
+                    log.debug("Received snapshot with {} changes", snapshots.getDocumentChanges().size());
+                    
+                    // Process each document change
+                    for (DocumentChange dc : snapshots.getDocumentChanges()) {
+                        // We're only interested in modifications (not new documents or deletions)
+                        if (dc.getType() == DocumentChange.Type.MODIFIED) {
+                            Payment payment = dc.getDocument().toObject(Payment.class);
+                            
+                            if (payment != null) {
+                                log.debug("Payment modified: {}, status: {}", payment.getId(), payment.getJobOrderStatus());
+                                
+                                // Check if the status is "Accepted" and handle notification
+                                String normalizedStatus = normalizeStatus(payment.getJobOrderStatus());
+                                if ("ACCEPTED".equals(normalizedStatus)) {
+                                    // Get the previous version of the document to check if status actually changed
+                                    try {
+                                        // Check if we've already sent a notification for this payment acceptance
+                                        String notificationKey = "notification_sent_" + payment.getId();
+                                        String cacheValue = getNotificationCache(notificationKey);
+                                        
+                                        if (cacheValue != null && cacheValue.equals("ACCEPTED")) {
+                                            log.debug("Notification already sent for payment ID: {}, skipping", payment.getId());
+                                            continue;
+                                        }
+                                        
+                                        log.info("Detected job order status change to Accepted for payment ID: {}", payment.getId());
+                                        sendAcceptedNotification(payment);
+                                        
+                                        // Mark this notification as sent to avoid duplicates
+                                        setNotificationCache(notificationKey, "ACCEPTED");
+                                    } catch (Exception ex) {
+                                        log.error("Error processing status change for payment {}: {}", 
+                                            payment.getId(), ex.getMessage(), ex);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+            log.info("Firestore listener for payments collection initialized successfully");
+        } catch (Exception e) {
+            log.error("Failed to initialize Firestore listener: {}", e.getMessage(), e);
+        }
+    }
+    
+    // Simple in-memory cache to avoid duplicate notifications
+    private final Map<String, String> notificationCache = new HashMap<>();
+    
+    private String getNotificationCache(String key) {
+        return notificationCache.get(key);
+    }
+    
+    private void setNotificationCache(String key, String value) {
+        notificationCache.put(key, value);
+    }
+    
+    /**
+     * Send notification for a payment that has been accepted
+     * @param payment The payment that was accepted
+     */
+    private void sendAcceptedNotification(Payment payment) {
+        try {
+            if (payment.getCustomerEmail() == null) {
+                log.warn("No customer email associated with payment: {}", payment.getId());
+                return;
+            }
+            
+            log.debug("Looking up customer by email: {}", payment.getCustomerEmail());
+            User customer = userService.getUserByEmailOrUsername(payment.getCustomerEmail());
+            
+            if (customer == null) {
+                log.warn("Customer not found for email: {}", payment.getCustomerEmail());
+                return;
+            }
+            
+            log.debug("Found customer: {}, userId: {}", customer.getEmail(), customer.getUserId());
+            
+            // Check if customer has a valid FCM token
+            boolean hasValidToken = notificationService.hasValidFcmToken(customer.getUserId());
+            if (!hasValidToken) {
+                log.warn("Customer does not have a valid FCM token, notification will not be sent");
+                return;
+            }
+            
+            Map<String, String> data = new HashMap<>();
+            data.put("paymentId", payment.getId());
+            data.put("type", "JOB_ORDER_ACCEPTED");
+            
+            boolean notificationSent = notificationService.sendNotificationToUser(
+                customer.getUserId(),
+                "Job Order Accepted",
+                "Your job order has been accepted by the driver",
+                data
+            );
+            
+            log.info("Notification sent to customer: {}", notificationSent ? "success" : "failed");
+        } catch (Exception e) {
+            log.error("Error sending accepted notification for payment {}: {}", payment.getId(), e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Cleanup method to close the listener when the service is destroyed
+     */
+    @PreDestroy
+    public void cleanup() {
+        if (paymentsListener != null) {
+            log.info("Closing Firestore payments listener");
+            paymentsListener.remove();
+        }
     }
 
     /**
