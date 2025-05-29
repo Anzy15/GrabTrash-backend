@@ -85,14 +85,14 @@ public class PaymentService {
                                 
                                 // Check if the status is "Accepted" and handle notification
                                 String normalizedStatus = normalizeStatus(payment.getJobOrderStatus());
-                                if ("ACCEPTED".equals(normalizedStatus)) {
+                                if ("Accepted".equals(normalizedStatus)) {
                                     // Get the previous version of the document to check if status actually changed
                                     try {
                                         // Check if we've already sent a notification for this payment acceptance
                                         String notificationKey = "notification_sent_" + payment.getId();
                                         String cacheValue = getNotificationCache(notificationKey);
                                         
-                                        if (cacheValue != null && cacheValue.equals("ACCEPTED")) {
+                                        if (cacheValue != null && cacheValue.equals("Accepted")) {
                                             log.debug("Notification already sent for payment ID: {}, skipping", payment.getId());
                                             continue;
                                         }
@@ -101,7 +101,7 @@ public class PaymentService {
                                         sendAcceptedNotification(payment);
                                         
                                         // Mark this notification as sent to avoid duplicates
-                                        setNotificationCache(notificationKey, "ACCEPTED");
+                                        setNotificationCache(notificationKey, "Accepted");
                                     } catch (Exception ex) {
                                         log.error("Error processing status change for payment {}: {}", 
                                             payment.getId(), ex.getMessage(), ex);
@@ -633,7 +633,7 @@ public class PaymentService {
     /**
      * Update job order status by a driver
      * @param paymentId Payment ID
-     * @param jobOrderStatus New job order status (e.g., "COMPLETED")
+     * @param jobOrderStatus New job order status (e.g., "Completed")
      * @return Updated payment response
      */
     public PaymentResponseDTO updateJobOrderStatus(String paymentId, String jobOrderStatus) {
@@ -672,10 +672,10 @@ public class PaymentService {
             payment.setJobOrderStatus(normalizedStatus);
             payment.setUpdatedAt(new Date());
             
-            // If job is marked as COMPLETED, release the truck (set to available)
-            if ("COMPLETED".equalsIgnoreCase(normalizedStatus) && payment.getTruckId() != null) {
+            // If job is marked as Completed, release the truck (set to available)
+            if ("Completed".equalsIgnoreCase(normalizedStatus) && payment.getTruckId() != null) {
                 String truckId = payment.getTruckId();
-                log.debug("Job marked as COMPLETED, releasing truck: {}", truckId);
+                log.debug("Job marked as Completed, releasing truck: {}", truckId);
                 
                 Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
                 
@@ -699,7 +699,7 @@ public class PaymentService {
             log.debug("Checking if notification should be sent. New status: {}, Previous status: {}, Equal: {}", 
                 normalizedStatus, previousStatus, normalizedStatus.equalsIgnoreCase(previousStatus));
                 
-            if ("ACCEPTED".equalsIgnoreCase(normalizedStatus) && !normalizedStatus.equalsIgnoreCase(previousStatus)) {
+            if ("Accepted".equalsIgnoreCase(normalizedStatus) && !normalizedStatus.equalsIgnoreCase(previousStatus)) {
                 log.info("Status changed to Accepted, sending notification to customer");
                 
                 if (payment.getCustomerEmail() != null) {
@@ -749,32 +749,32 @@ public class PaymentService {
     /**
      * Helper method to normalize job order status for consistent comparison
      * @param status The status to normalize
-     * @return Normalized status in uppercase
+     * @return Normalized status in proper case format
      */
     private String normalizeStatus(String status) {
         if (status == null) {
             return null;
         }
         
-        // Convert to uppercase for consistent comparison
-        String normalized = status.toUpperCase();
+        // Don't convert to uppercase anymore
+        String normalized = status;
         
         // Handle variations in formatting
-        normalized = normalized.replace("-", "_");
-        normalized = normalized.replace(" ", "_");
+        normalized = normalized.replace("-", "-");
+        normalized = normalized.replace(" ", "-");
         
         // Make sure we're using consistent statuses
         switch (normalized) {
-            case "NEW":
-            case "ACCEPTED":
-            case "IN_PROGRESS":
-            case "COMPLETED":
-            case "CANCELLED":
+            case "New":
+            case "Accepted":
+            case "In-Progress":
+            case "Completed":
+            case "Cancelled":
                 return normalized;
-            case "AVAILABLE":
-                return "NEW"; // Map "Available" to "NEW"
-            case "INPROGRESS":
-                return "IN_PROGRESS"; // Fix missing underscore
+            case "Available":
+                return "New"; // Map "Available" to "New"
+            case "InProgress":
+                return "In-Progress"; // Fix missing hyphen
             default:
                 log.warn("Unknown job order status: {}, using as-is: {}", status, normalized);
                 return normalized;
