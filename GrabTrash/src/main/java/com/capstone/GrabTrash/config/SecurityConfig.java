@@ -41,6 +41,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/users/register", "/api/users/login", "/api/users/security-questions",
                                "/api/users/forgot-password/reset", "/api/users/forgot-password/question",
                                "/api/pickup-locations", "api/barangays").permitAll()
+                // Allow unrestricted access to notification test endpoints
+                .requestMatchers("/api/notifications/send", "/api/notifications/send-flexible",
+                               "/api/notifications/test-send", "/api/notifications/test-barangay", 
+                               "/api/notifications/test-role", "/api/notifications/test-collection-reminders",
+                               "/api/notifications/test-token-validity", "/api/notifications/send-compat").permitAll()
                 .requestMatchers("/error").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/pickup-locations/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/pickup-locations").authenticated()
