@@ -16,6 +16,8 @@ import com.google.cloud.firestore.QuerySnapshot;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PreDestroy;
@@ -812,6 +814,89 @@ public class PaymentService {
         } catch (InterruptedException | ExecutionException e) {
             log.error("Error updating delivery status for payment ID: {}", paymentId, e);
             throw new RuntimeException("Failed to update delivery status: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Update job order status by a customer
+     * This method includes authorization checks to ensure only the customer who owns the payment can update it
+     * @param paymentId Payment ID
+     * @param jobOrderStatus New job order status
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO updateJobOrderStatusByCustomer(String paymentId, String jobOrderStatus) {
+        try {
+            log.info("Customer updating job order status for payment ID: {} to status: {}", paymentId, jobOrderStatus);
+            
+            // Get the current user from security context
+            String currentUserEmail = getCurrentUserEmail();
+            if (currentUserEmail == null) {
+                throw new RuntimeException("Unable to determine current user");
+            }
+            
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                log.error("Payment not found with ID: {}", paymentId);
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Authorization check: ensure the current user is the customer who owns this payment
+            if (!currentUserEmail.equals(payment.getCustomerEmail())) {
+                log.error("Unauthorized attempt to update payment. Current user: {}, Payment owner: {}", 
+                    currentUserEmail, payment.getCustomerEmail());
+                throw new RuntimeException("You are not authorized to update this payment");
+            }
+            
+            log.debug("Authorization passed. Customer {} updating their payment {}", currentUserEmail, paymentId);
+            
+            // Validate job order status
+            if (jobOrderStatus == null || jobOrderStatus.isEmpty()) {
+                log.error("Job order status cannot be empty for payment ID: {}", paymentId);
+                throw new RuntimeException("Job order status cannot be empty");
+            }
+            
+            // Store previous status for comparison
+            String previousStatus = payment.getJobOrderStatus();
+            log.debug("Previous job order status: {}", previousStatus);
+            
+            // Normalize the job order status to ensure consistent casing
+            String normalizedStatus = normalizeStatus(jobOrderStatus);
+            log.debug("Normalized new status: {}", normalizedStatus);
+            
+            // Update job order status
+            payment.setJobOrderStatus(normalizedStatus);
+            payment.setUpdatedAt(new Date());
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            log.info("Successfully updated job order status to: {} for payment ID: {} by customer: {}", 
+                normalizedStatus, paymentId, currentUserEmail);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error updating job order status for payment ID: {} by customer", paymentId, e);
+            throw new RuntimeException("Failed to update job order status: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get the current user's email from the security context
+     * @return Current user's email or null if not found
+     */
+    private String getCurrentUserEmail() {
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            if (principal instanceof UserDetails) {
+                return ((UserDetails) principal).getUsername();
+            } else if (principal instanceof String) {
+                return (String) principal;
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Error getting current user from security context", e);
+            return null;
         }
     }
 }

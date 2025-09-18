@@ -5,6 +5,7 @@ import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
 import com.capstone.GrabTrash.dto.DriverAssignmentDTO;
 import com.capstone.GrabTrash.dto.DeliveryStatusUpdateDTO;
+import com.capstone.GrabTrash.dto.JobOrderStatusUpdateDTO;
 import com.capstone.GrabTrash.service.PaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -148,6 +149,27 @@ public class PaymentController {
         PaymentResponseDTO updatedPayment = paymentService.updateDeliveryStatus(
                 paymentId, 
                 updateRequest.getIsDelivered());
+        
+        return ResponseEntity.ok(updatedPayment);
+    }
+
+    /**
+     * Update the job order status of a payment by customer
+     * Requires JWT authentication with customer role
+     * Only allows customers to update their own payments
+     * @param paymentId Payment ID
+     * @param updateRequest Job order status update request
+     * @return Updated payment response
+     */
+    @PutMapping("/{paymentId}/job-order-status")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<PaymentResponseDTO> updateJobOrderStatusByCustomer(
+            @PathVariable String paymentId,
+            @RequestBody JobOrderStatusUpdateDTO updateRequest) {
+        
+        PaymentResponseDTO updatedPayment = paymentService.updateJobOrderStatusByCustomer(
+                paymentId, 
+                updateRequest.getJobOrderStatus());
         
         return ResponseEntity.ok(updatedPayment);
     }
