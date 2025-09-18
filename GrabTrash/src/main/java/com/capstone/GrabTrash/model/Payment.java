@@ -38,6 +38,8 @@ public class Payment {
     private String truckId;   // ID of the assigned truck
     private String jobOrderStatus;  // Status of the job order (NEW, IN_PROGRESS, COMPLETED, CANCELLED)
     private Boolean isDelivered;  // Whether the waste has been delivered to the disposal facility
+    private String customerConfirmation;  // Customer confirmation proof image URL
+    private String driverConfirmation;  // Driver confirmation proof image URL
     
     // Pre-persist hook to set dates
     public void prePersist() {
@@ -100,5 +102,25 @@ public class Payment {
     @PropertyName("isDelivered")
     public void setIsDelivered(Boolean isDelivered) {
         this.isDelivered = isDelivered;
+    }
+    
+    @PropertyName("customerConfirmation")
+    public String getCustomerConfirmation() {
+        return customerConfirmation;
+    }
+
+    @PropertyName("customerConfirmation")
+    public void setCustomerConfirmation(String customerConfirmation) {
+        this.customerConfirmation = customerConfirmation;
+    }
+    
+    @PropertyName("driverConfirmation")
+    public String getDriverConfirmation() {
+        return driverConfirmation;
+    }
+
+    @PropertyName("driverConfirmation")
+    public void setDriverConfirmation(String driverConfirmation) {
+        this.driverConfirmation = driverConfirmation;
     }
 }

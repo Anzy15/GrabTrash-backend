@@ -6,6 +6,7 @@ import com.capstone.GrabTrash.dto.PaymentResponseDTO;
 import com.capstone.GrabTrash.dto.DriverAssignmentDTO;
 import com.capstone.GrabTrash.dto.DeliveryStatusUpdateDTO;
 import com.capstone.GrabTrash.dto.JobOrderStatusUpdateDTO;
+import com.capstone.GrabTrash.dto.ImageConfirmationDTO;
 import com.capstone.GrabTrash.service.PaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -170,6 +171,27 @@ public class PaymentController {
         PaymentResponseDTO updatedPayment = paymentService.updateJobOrderStatusByCustomer(
                 paymentId, 
                 updateRequest.getJobOrderStatus());
+        
+        return ResponseEntity.ok(updatedPayment);
+    }
+
+    /**
+     * Upload image confirmation proof for job status
+     * Allows both customers and drivers to upload confirmation images
+     * Requires JWT authentication with customer or driver role
+     * @param paymentId Payment ID
+     * @param imageRequest Image confirmation request
+     * @return Updated payment response
+     */
+    @PostMapping("/{paymentId}/confirmation-image")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'DRIVER')")
+    public ResponseEntity<PaymentResponseDTO> uploadConfirmationImage(
+            @PathVariable String paymentId,
+            @RequestBody ImageConfirmationDTO imageRequest) {
+        
+        PaymentResponseDTO updatedPayment = paymentService.uploadConfirmationImage(
+                paymentId, 
+                imageRequest.getImageUrl());
         
         return ResponseEntity.ok(updatedPayment);
     }

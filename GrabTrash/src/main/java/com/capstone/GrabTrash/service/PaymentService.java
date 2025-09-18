@@ -417,6 +417,8 @@ public class PaymentService {
                 .truckId(payment.getTruckId())
                 .jobOrderStatus(payment.getJobOrderStatus())
                 .isDelivered(payment.getIsDelivered())
+                .customerConfirmation(payment.getCustomerConfirmation())
+                .driverConfirmation(payment.getDriverConfirmation())
                 .message("Payment retrieved successfully")
                 .build();
     }
@@ -896,6 +898,116 @@ public class PaymentService {
             return null;
         } catch (Exception e) {
             log.error("Error getting current user from security context", e);
+            return null;
+        }
+    }
+    
+    /**
+     * Get the current user's role from the security context
+     * @return Current user's role or null if not found
+     */
+    private String getCurrentUserRole() {
+        try {
+            return SecurityContextHolder.getContext().getAuthentication().getAuthorities()
+                .stream()
+                .findFirst()
+                .map(authority -> authority.getAuthority().replace("ROLE_", ""))
+                .orElse(null);
+        } catch (Exception e) {
+            log.error("Error getting current user role from security context", e);
+            return null;
+        }
+    }
+
+    /**
+     * Upload confirmation image for job status
+     * Allows both customers and drivers to upload confirmation images
+     * @param paymentId Payment ID
+     * @param imageUrl Image URL or base64 data
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO uploadConfirmationImage(String paymentId, String imageUrl) {
+        try {
+            log.info("Uploading confirmation image for payment ID: {}", paymentId);
+            
+            // Get the current user from security context
+            String currentUserEmail = getCurrentUserEmail();
+            String currentUserRole = getCurrentUserRole();
+            
+            if (currentUserEmail == null || currentUserRole == null) {
+                throw new RuntimeException("Unable to determine current user or role");
+            }
+            
+            log.debug("Current user: {}, role: {}", currentUserEmail, currentUserRole);
+            
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                log.error("Payment not found with ID: {}", paymentId);
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Validate image URL
+            if (imageUrl == null || imageUrl.trim().isEmpty()) {
+                throw new RuntimeException("Image URL cannot be empty");
+            }
+            
+            // Role-based logic for storing the image
+            if ("CUSTOMER".equalsIgnoreCase(currentUserRole)) {
+                // Authorization check: ensure the current user is the customer who owns this payment
+                if (!currentUserEmail.equals(payment.getCustomerEmail())) {
+                    log.error("Unauthorized attempt to upload confirmation image. Current user: {}, Payment owner: {}", 
+                        currentUserEmail, payment.getCustomerEmail());
+                    throw new RuntimeException("You are not authorized to upload confirmation for this payment");
+                }
+                
+                // Store in customerConfirmation field
+                payment.setCustomerConfirmation(imageUrl);
+                log.debug("Customer confirmation image uploaded for payment: {}", paymentId);
+                
+            } else if ("DRIVER".equalsIgnoreCase(currentUserRole)) {
+                // Authorization check: ensure the current user is the driver assigned to this payment
+                if (payment.getDriverId() == null || !currentUserEmail.equals(getDriverEmailById(payment.getDriverId()))) {
+                    log.error("Unauthorized attempt to upload confirmation image. Current user: {}, Assigned driver: {}", 
+                        currentUserEmail, payment.getDriverId());
+                    throw new RuntimeException("You are not authorized to upload confirmation for this payment");
+                }
+                
+                // Store in driverConfirmation field
+                payment.setDriverConfirmation(imageUrl);
+                log.debug("Driver confirmation image uploaded for payment: {}", paymentId);
+                
+            } else {
+                throw new RuntimeException("Invalid user role for uploading confirmation image: " + currentUserRole);
+            }
+            
+            // Update timestamp
+            payment.setUpdatedAt(new Date());
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            log.info("Successfully uploaded confirmation image for payment ID: {} by {} ({})", 
+                paymentId, currentUserEmail, currentUserRole);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error uploading confirmation image for payment ID: {}", paymentId, e);
+            throw new RuntimeException("Failed to upload confirmation image: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Helper method to get driver email by driver ID
+     * @param driverId Driver ID
+     * @return Driver email or null if not found
+     */
+    private String getDriverEmailById(String driverId) {
+        try {
+            User driver = userService.getUserById(driverId);
+            return driver != null ? driver.getEmail() : null;
+        } catch (Exception e) {
+            log.error("Error getting driver email for ID: {}", driverId, e);
             return null;
         }
     }
