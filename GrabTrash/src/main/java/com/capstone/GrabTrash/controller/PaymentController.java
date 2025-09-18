@@ -155,20 +155,20 @@ public class PaymentController {
     }
 
     /**
-     * Update the job order status of a payment by customer
-     * Requires JWT authentication with customer role
-     * Only allows customers to update their own payments
+     * Update the job order status of a payment by customer or driver
+     * Requires JWT authentication with customer or driver role
+     * Customers can only update their own payments, drivers can only update assigned payments
      * @param paymentId Payment ID
      * @param updateRequest Job order status update request
      * @return Updated payment response
      */
     @PutMapping("/{paymentId}/job-order-status")
-    @PreAuthorize("hasRole('CUSTOMER')")
-    public ResponseEntity<PaymentResponseDTO> updateJobOrderStatusByCustomer(
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'DRIVER')")
+    public ResponseEntity<PaymentResponseDTO> updateJobOrderStatus(
             @PathVariable String paymentId,
             @RequestBody JobOrderStatusUpdateDTO updateRequest) {
         
-        PaymentResponseDTO updatedPayment = paymentService.updateJobOrderStatusByCustomer(
+        PaymentResponseDTO updatedPayment = paymentService.updateJobOrderStatusByRole(
                 paymentId, 
                 updateRequest.getJobOrderStatus());
         

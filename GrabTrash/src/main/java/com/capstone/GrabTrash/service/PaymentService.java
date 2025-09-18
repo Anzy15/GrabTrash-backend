@@ -884,6 +884,153 @@ public class PaymentService {
     }
     
     /**
+     * Update job order status by customer or driver based on user role
+     * Uses role-based authorization to determine access permissions
+     * @param paymentId Payment ID
+     * @param jobOrderStatus New job order status
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO updateJobOrderStatusByRole(String paymentId, String jobOrderStatus) {
+        try {
+            log.info("User updating job order status for payment ID: {} to status: {}", paymentId, jobOrderStatus);
+            
+            // Get the current user from security context
+            String currentUserEmail = getCurrentUserEmail();
+            String currentUserRole = getCurrentUserRole();
+            
+            if (currentUserEmail == null || currentUserRole == null) {
+                throw new RuntimeException("Unable to determine current user or role");
+            }
+            
+            log.debug("Current user: {}, role: {}", currentUserEmail, currentUserRole);
+            
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                log.error("Payment not found with ID: {}", paymentId);
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Validate job order status
+            if (jobOrderStatus == null || jobOrderStatus.isEmpty()) {
+                log.error("Job order status cannot be empty for payment ID: {}", paymentId);
+                throw new RuntimeException("Job order status cannot be empty");
+            }
+            
+            // Role-based authorization checks using if-else
+            if ("CUSTOMER".equalsIgnoreCase(currentUserRole)) {
+                // Authorization check: ensure the current user is the customer who owns this payment
+                if (!currentUserEmail.equals(payment.getCustomerEmail())) {
+                    log.error("Unauthorized attempt to update payment. Current user: {}, Payment owner: {}", 
+                        currentUserEmail, payment.getCustomerEmail());
+                    throw new RuntimeException("You are not authorized to update this payment");
+                }
+                log.debug("Customer authorization passed for payment: {}", paymentId);
+                
+            } else if ("DRIVER".equalsIgnoreCase(currentUserRole)) {
+                // Authorization check: ensure the current user is the driver assigned to this payment
+                if (payment.getDriverId() == null || !currentUserEmail.equals(getDriverEmailById(payment.getDriverId()))) {
+                    log.error("Unauthorized attempt to update payment. Current user: {}, Assigned driver: {}", 
+                        currentUserEmail, payment.getDriverId());
+                    throw new RuntimeException("You are not authorized to update this payment");
+                }
+                log.debug("Driver authorization passed for payment: {}", paymentId);
+                
+            } else {
+                throw new RuntimeException("Invalid user role for updating job order status: " + currentUserRole);
+            }
+            
+            // Store previous status for comparison
+            String previousStatus = payment.getJobOrderStatus();
+            log.debug("Previous job order status: {}", previousStatus);
+            
+            // Normalize the job order status to ensure consistent casing
+            String normalizedStatus = normalizeStatus(jobOrderStatus);
+            log.debug("Normalized new status: {}", normalizedStatus);
+            
+            // Update job order status
+            payment.setJobOrderStatus(normalizedStatus);
+            payment.setUpdatedAt(new Date());
+            
+            // If job is marked as Completed, release the truck (set to available)
+            if ("Completed".equalsIgnoreCase(normalizedStatus) && payment.getTruckId() != null) {
+                String truckId = payment.getTruckId();
+                log.debug("Job marked as Completed, releasing truck: {}", truckId);
+                
+                Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
+                
+                if (truck != null) {
+                    // Update truck status to AVAILABLE
+                    truck.setStatus("AVAILABLE");
+                    truck.setUpdatedAt(new Date());
+                    firestore.collection("trucks").document(truckId).set(truck);
+                    log.debug("Updated truck status to AVAILABLE");
+                }
+                
+                // Also update payment status
+                payment.setStatus("COMPLETED");
+            }
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            log.info("Successfully updated job order status to: {} for payment ID: {} by {} ({})", 
+                normalizedStatus, paymentId, currentUserEmail, currentUserRole);
+            
+            // Send notification to the customer if the status changed to Accepted by driver
+            log.debug("Checking if notification should be sent. New status: {}, Previous status: {}, Role: {}", 
+                normalizedStatus, previousStatus, currentUserRole);
+                
+            if ("Accepted".equalsIgnoreCase(normalizedStatus) && 
+                !normalizedStatus.equalsIgnoreCase(previousStatus) && 
+                "DRIVER".equalsIgnoreCase(currentUserRole)) {
+                log.info("Status changed to Accepted by driver, sending notification to customer");
+                
+                if (payment.getCustomerEmail() != null) {
+                    log.debug("Looking up customer by email: {}", payment.getCustomerEmail());
+                    User customer = userService.getUserByEmailOrUsername(payment.getCustomerEmail());
+                    
+                    if (customer != null) {
+                        log.debug("Found customer: {}, userId: {}", customer.getEmail(), customer.getUserId());
+                        
+                        // Check if customer has a valid FCM token
+                        boolean hasValidToken = notificationService.hasValidFcmToken(customer.getUserId());
+                        if (!hasValidToken) {
+                            log.warn("Customer does not have a valid FCM token, notification will not be sent");
+                            return mapToResponseDTO(payment);
+                        }
+                        
+                        Map<String, String> data = new HashMap<>();
+                        data.put("paymentId", paymentId);
+                        data.put("type", "JOB_ORDER_ACCEPTED");
+                        
+                        boolean notificationSent = notificationService.sendNotificationToUser(
+                            customer.getUserId(),
+                            "Job Order Accepted",
+                            "Your job order has been accepted by the driver",
+                            data
+                        );
+                        
+                        log.info("Notification sent to customer: {}", notificationSent ? "success" : "failed");
+                    } else {
+                        log.warn("Customer not found for email: {}", payment.getCustomerEmail());
+                    }
+                } else {
+                    log.warn("No customer email associated with payment: {}", paymentId);
+                }
+            } else {
+                log.debug("No notification needed. Status: {}, Previous: {}, Role: {}", 
+                    normalizedStatus, previousStatus, currentUserRole);
+            }
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error updating job order status for payment ID: {} by role", paymentId, e);
+            throw new RuntimeException("Failed to update job order status: " + e.getMessage());
+        }
+    }
+    
+    /**
      * Get the current user's email from the security context
      * @return Current user's email or null if not found
      */
