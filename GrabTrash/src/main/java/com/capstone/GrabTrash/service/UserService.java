@@ -221,6 +221,7 @@ public class UserService {
             profile.put("phoneNumber", user.getPhoneNumber());
             profile.put("barangayId", user.getBarangayId());     // Add this line
             profile.put("barangayName", user.getBarangayName()); // Add this line
+            profile.put("profileImage", user.getProfileImage()); // Add profile image
 
             return ResponseEntity.ok(profile);
         } catch (Exception e) {
@@ -1160,6 +1161,60 @@ public class UserService {
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Upload profile image for the current authenticated user
+     * Accessible by all user roles - users can only update their own profile image
+     * @param imageUrl Profile image URL or base64 data
+     * @return Updated user profile response
+     */
+    public ResponseEntity<?> uploadProfileImage(String imageUrl) {
+        try {
+            // Get the current authenticated user from SecurityContext
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not authenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+            }
+
+            // Get the current user's email
+            String userEmail = authentication.getName();
+            User currentUser = getUserByEmailOrUsername(userEmail);
+            
+            if (currentUser == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "User not found");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Validate image URL
+            if (imageUrl == null || imageUrl.trim().isEmpty()) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "Image URL cannot be empty");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Update the user's profile image
+            currentUser.setProfileImage(imageUrl);
+            
+            // Save the updated user to Firestore
+            firestore.collection("users").document(currentUser.getUserId()).set(currentUser).get();
+
+            // Create response without sensitive information
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Profile image updated successfully");
+            response.put("userId", currentUser.getUserId());
+            response.put("profileImage", currentUser.getProfileImage());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Failed to update profile image: " + e.getMessage());
             return ResponseEntity.badRequest().body(error);
         }
     }
