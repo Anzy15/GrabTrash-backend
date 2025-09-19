@@ -3,6 +3,7 @@ package com.capstone.GrabTrash.service;
 import com.capstone.GrabTrash.dto.DashboardStatsDTO;
 import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
+import com.capstone.GrabTrash.dto.TruckResponseDTO;
 import com.capstone.GrabTrash.model.Payment;
 import com.capstone.GrabTrash.model.User;
 import com.capstone.GrabTrash.model.Truck;
@@ -219,7 +220,8 @@ public class PaymentService {
             
             // Only attempt auto-assignment if trashWeight is provided
             if (paymentRequest.getTrashWeight() != null && paymentRequest.getTrashWeight() > 0) {
-                log.info("Attempting automated truck assignment for weight: {} kg", paymentRequest.getTrashWeight());
+                log.info("Attempting automated truck assignment for weight: {} kg, waste type: {}", 
+                    paymentRequest.getTrashWeight(), paymentRequest.getWasteType());
                 
                 try {
                     // Find available trucks that can handle the weight
@@ -227,6 +229,8 @@ public class PaymentService {
                         paymentRequest.getTrashWeight(), 
                         paymentRequest.getWasteType()
                     );
+                    
+                    log.info("Found {} available trucks for assignment", availableTrucks.size());
                     
                     if (!availableTrucks.isEmpty()) {
                         // Select the first truck (smallest sufficient capacity due to sorting)
@@ -237,13 +241,29 @@ public class PaymentService {
                         log.info("Auto-assigned truck: {} (capacity: {} kg) and driver: {} for payment: {}", 
                             assignedTruckId, selectedTruck.getCapacity(), assignedDriverId, paymentId);
                     } else {
-                        log.warn("No available trucks found for weight: {} kg and waste type: {}", 
+                        log.warn("No available trucks found for weight: {} kg and waste type: {}. Payment will be created without assignment.", 
                             paymentRequest.getTrashWeight(), paymentRequest.getWasteType());
+                        
+                        // Debug: Try to find ALL trucks to see what's available
+                        try {
+                            List<TruckResponseDTO> allTrucks = truckService.getAllTrucks();
+                            log.info("Total trucks in system: {}", allTrucks.size());
+                            for (TruckResponseDTO truck : allTrucks) {
+                                log.debug("Truck {}: capacity={}, status={}, driverId={}, wasteType={}", 
+                                    truck.getTruckId(), truck.getCapacity(), truck.getStatus(), 
+                                    truck.getDriverId(), truck.getWasteType());
+                            }
+                        } catch (Exception debugEx) {
+                            log.warn("Could not fetch all trucks for debugging: {}", debugEx.getMessage());
+                        }
                     }
                 } catch (Exception e) {
                     log.error("Error during automated truck assignment: {}", e.getMessage(), e);
                     // Continue with payment creation even if auto-assignment fails
                 }
+            } else {
+                log.info("Skipping automated truck assignment - trashWeight not provided or invalid: {}", 
+                    paymentRequest.getTrashWeight());
             }
 
             Payment payment = Payment.builder()

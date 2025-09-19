@@ -13,6 +13,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * REST Controller for handling truck-related endpoints
@@ -231,5 +233,45 @@ public class TruckController {
     public ResponseEntity<List<TruckResponseDTO>> getUnassignedTrucks() {
         List<TruckResponseDTO> trucks = truckService.getUnassignedTrucks();
         return ResponseEntity.ok(trucks);
+    }
+    
+    /**
+     * Debug endpoint: Find available trucks for specific weight and waste type
+     * Requires JWT authentication with admin role
+     * @param weight Required capacity in kg
+     * @param wasteType Waste type (optional)
+     * @return List of suitable trucks with debug information
+     */
+    @GetMapping("/debug/available")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> debugAvailableTrucks(
+            @RequestParam double weight,
+            @RequestParam(required = false) String wasteType) {
+        
+        Map<String, Object> debugInfo = new HashMap<>();
+        
+        try {
+            // Get all trucks for debugging
+            List<TruckResponseDTO> allTrucks = truckService.getAllTrucks();
+            debugInfo.put("totalTrucks", allTrucks.size());
+            debugInfo.put("allTrucks", allTrucks);
+            
+            // Find suitable trucks using the same logic as payment processing
+            List<com.capstone.GrabTrash.model.Truck> suitableTrucks = 
+                truckService.findAvailableTrucksByCapacity(weight, wasteType);
+            
+            debugInfo.put("requiredWeight", weight);
+            debugInfo.put("wasteType", wasteType);
+            debugInfo.put("suitableTrucksCount", suitableTrucks.size());
+            debugInfo.put("suitableTrucks", suitableTrucks);
+            
+            return ResponseEntity.ok(debugInfo);
+            
+        } catch (Exception e) {
+            debugInfo.put("error", e.getMessage());
+            debugInfo.put("requiredWeight", weight);
+            debugInfo.put("wasteType", wasteType);
+            return ResponseEntity.ok(debugInfo);
+        }
     }
 } 

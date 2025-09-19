@@ -414,6 +414,8 @@ public class TruckService {
      */
     public List<Truck> findAvailableTrucksByCapacity(double requiredCapacity, String wasteType) {
         try {
+            log.info("Looking for trucks with capacity >= {} kg and waste type: {}", requiredCapacity, wasteType);
+            
             CollectionReference trucksCollection = firestore.collection(COLLECTION_NAME);
             
             // First, get trucks with "AVAILABLE" status
@@ -421,38 +423,64 @@ public class TruckService {
             ApiFuture<QuerySnapshot> availableFuture = availableQuery.get();
             List<Truck> availableTrucks = availableFuture.get().toObjects(Truck.class);
             
+            log.info("Found {} trucks with AVAILABLE status", availableTrucks.size());
+            
+            // Debug: Log all available trucks
+            for (Truck truck : availableTrucks) {
+                log.debug("Truck {}: capacity={}, driverId={}, wasteType={}, status={}", 
+                    truck.getTruckId(), truck.getCapacity(), truck.getDriverId(), truck.getWasteType(), truck.getStatus());
+            }
+            
             // Filter trucks that:
             // 1. Have sufficient capacity
             // 2. Are not assigned to any payment/order (no truckId references in payments)
             // 3. Match the waste type (if specified)
             // 4. Have an assigned driver
-            return availableTrucks.stream()
+            List<Truck> suitableTrucks = availableTrucks.stream()
                 .filter(truck -> {
                     // Check capacity
                     if (truck.getCapacity() == null || truck.getCapacity() < requiredCapacity) {
+                        log.debug("Truck {} filtered out: insufficient capacity ({} < {})", 
+                            truck.getTruckId(), truck.getCapacity(), requiredCapacity);
                         return false;
                     }
                     
                     // Check if truck has a driver assigned
                     if (truck.getDriverId() == null || truck.getDriverId().isEmpty()) {
+                        log.debug("Truck {} filtered out: no driver assigned", truck.getTruckId());
                         return false;
                     }
                     
-                    // Check waste type compatibility (if specified)
+                    // Check waste type compatibility (relaxed matching)
                     if (wasteType != null && !wasteType.isEmpty() && 
                         truck.getWasteType() != null && !truck.getWasteType().isEmpty()) {
-                        // If both have waste types, they should match
-                        return truck.getWasteType().equalsIgnoreCase(wasteType);
+                        // If both have waste types, they should match (case-insensitive)
+                        if (!truck.getWasteType().equalsIgnoreCase(wasteType)) {
+                            log.debug("Truck {} filtered out: waste type mismatch ({} != {})", 
+                                truck.getTruckId(), truck.getWasteType(), wasteType);
+                            return false;
+                        }
                     }
                     
                     // Check if truck is not currently assigned to any active payment
-                    return !isTruckAssignedToActivePayment(truck.getTruckId());
+                    boolean isAssigned = isTruckAssignedToActivePayment(truck.getTruckId());
+                    if (isAssigned) {
+                        log.debug("Truck {} filtered out: already assigned to an active payment", truck.getTruckId());
+                        return false;
+                    }
+                    
+                    log.info("Truck {} passed all filters: capacity={}, driverId={}, wasteType={}", 
+                        truck.getTruckId(), truck.getCapacity(), truck.getDriverId(), truck.getWasteType());
+                    return true;
                 })
                 .sorted((t1, t2) -> {
                     // Sort by capacity (smallest sufficient capacity first for optimal assignment)
                     return Double.compare(t1.getCapacity(), t2.getCapacity());
                 })
                 .collect(java.util.stream.Collectors.toList());
+                
+            log.info("Found {} suitable trucks after filtering", suitableTrucks.size());
+            return suitableTrucks;
                 
         } catch (InterruptedException | ExecutionException e) {
             log.error("Error finding available trucks by capacity", e);
