@@ -217,6 +217,8 @@ public class PaymentService {
             // AUTOMATED TRUCK AND DRIVER ASSIGNMENT
             String assignedTruckId = null;
             String assignedDriverId = null;
+            Double calculatedAmount = paymentRequest.getAmount(); // Default to request amount
+            Double calculatedTotalAmount = paymentRequest.getTotalAmount(); // Default to request total
             
             // Only attempt auto-assignment if trashWeight is provided
             if (paymentRequest.getTrashWeight() != null && paymentRequest.getTrashWeight() > 0) {
@@ -238,8 +240,19 @@ public class PaymentService {
                         assignedTruckId = selectedTruck.getTruckId();
                         assignedDriverId = selectedTruck.getDriverId();
                         
-                        log.info("Auto-assigned truck: {} (capacity: {} kg) and driver: {} for payment: {}", 
-                            assignedTruckId, selectedTruck.getCapacity(), assignedDriverId, paymentId);
+                        // Calculate amount based on truck price
+                        if (selectedTruck.getTruckPrice() != null && selectedTruck.getTruckPrice() > 0) {
+                            calculatedAmount = selectedTruck.getTruckPrice();
+                            calculatedTotalAmount = selectedTruck.getTruckPrice(); // Use base truck price without service fee
+                            
+                            log.info("Using truck base price - Amount: {}, Total Amount: {} based on truck price: {}", 
+                                calculatedAmount, calculatedTotalAmount, selectedTruck.getTruckPrice());
+                        } else {
+                            log.warn("Selected truck {} has no price set, using request amounts", assignedTruckId);
+                        }
+                        
+                        log.info("Auto-assigned truck: {} (capacity: {} kg, price: {}) and driver: {} for payment: {}", 
+                            assignedTruckId, selectedTruck.getCapacity(), selectedTruck.getTruckPrice(), assignedDriverId, paymentId);
                     } else {
                         log.warn("No available trucks found for weight: {} kg and waste type: {}. Payment will be created without assignment.", 
                             paymentRequest.getTrashWeight(), paymentRequest.getWasteType());
@@ -249,9 +262,9 @@ public class PaymentService {
                             List<TruckResponseDTO> allTrucks = truckService.getAllTrucks();
                             log.info("Total trucks in system: {}", allTrucks.size());
                             for (TruckResponseDTO truck : allTrucks) {
-                                log.debug("Truck {}: capacity={}, status={}, driverId={}, wasteType={}", 
+                                log.debug("Truck {}: capacity={}, status={}, driverId={}, wasteType={}, price={}", 
                                     truck.getTruckId(), truck.getCapacity(), truck.getStatus(), 
-                                    truck.getDriverId(), truck.getWasteType());
+                                    truck.getDriverId(), truck.getWasteType(), truck.getTruckPrice());
                             }
                         } catch (Exception debugEx) {
                             log.warn("Could not fetch all trucks for debugging: {}", debugEx.getMessage());
@@ -274,8 +287,8 @@ public class PaymentService {
                     .address(paymentRequest.getAddress())
                     .latitude(paymentRequest.getLatitude())
                     .longitude(paymentRequest.getLongitude())
-                    .amount(paymentRequest.getAmount())
-                    .totalAmount(paymentRequest.getTotalAmount())
+                    .amount(calculatedAmount) // Use calculated amount based on truck price
+                    .totalAmount(calculatedTotalAmount) // Use calculated total amount
                     .paymentMethod(paymentRequest.getPaymentMethod())
                     .paymentReference(paymentRequest.getPaymentReference())
                     .notes(paymentRequest.getNotes())
@@ -338,7 +351,7 @@ public class PaymentService {
                     .driverId(payment.getDriverId())
                     .jobOrderStatus(payment.getJobOrderStatus())
                     .message(assignedTruckId != null ? 
-                        "Payment processed successfully with automated truck and driver assignment" : 
+                        String.format("Payment processed successfully with automated truck and driver assignment. Amount set to truck base price: %.2f", calculatedAmount) : 
                         "Payment processed successfully")
                     .build();
 
@@ -518,6 +531,8 @@ public class PaymentService {
         }
         return responseDTOs;
     }
+    
+
 
     public List<Map<String, Object>> getTopBarangaysByPickupFrequency(int topN) {
         try {
