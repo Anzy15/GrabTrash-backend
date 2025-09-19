@@ -27,5 +27,6 @@ public class PaymentRequestDTO {
     private String notes;
     private String barangayId;
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
+    private Double trashWeight; // Weight of trash in kilograms
     private String truckId;    // ID of the selected truck
 }

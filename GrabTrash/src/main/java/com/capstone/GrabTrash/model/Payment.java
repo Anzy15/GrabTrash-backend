@@ -37,6 +37,7 @@ public class Payment {
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
     private String truckId;   // ID of the assigned truck
     private String jobOrderStatus;  // Status of the job order (NEW, IN_PROGRESS, COMPLETED, CANCELLED)
+    private Double trashWeight; // Weight of trash in kilograms
     private Boolean isDelivered;  // Whether the waste has been delivered to the disposal facility
     private String customerConfirmation;  // Customer confirmation proof image URL
     private String driverConfirmation;  // Driver confirmation proof image URL
@@ -92,6 +93,16 @@ public class Payment {
     @PropertyName("jobOrderStatus")
     public void setJobOrderStatus(String jobOrderStatus) {
         this.jobOrderStatus = jobOrderStatus;
+    }
+    
+    @PropertyName("trashWeight")
+    public Double getTrashWeight() {
+        return trashWeight;
+    }
+
+    @PropertyName("trashWeight")
+    public void setTrashWeight(Double trashWeight) {
+        this.trashWeight = trashWeight;
     }
     
     @PropertyName("isDelivered")

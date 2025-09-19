@@ -41,13 +41,15 @@ public class PaymentService {
 
     private final Firestore firestore;
     private final UserService userService;
+    private final TruckService truckService;
     private final NotificationService notificationService;
     private ListenerRegistration paymentsListener;
 
     @Autowired
-    public PaymentService(Firestore firestore, @Lazy UserService userService, NotificationService notificationService) {
+    public PaymentService(Firestore firestore, @Lazy UserService userService, TruckService truckService, NotificationService notificationService) {
         this.firestore = firestore;
         this.userService = userService;
+        this.truckService = truckService;
         this.notificationService = notificationService;
         
         // Initialize the Firestore listener for payments collection
@@ -210,6 +212,39 @@ public class PaymentService {
             if (paymentRequest.getBarangayId() != null) {
                 barangayId = paymentRequest.getBarangayId(); // allow override if provided
             }
+            
+            // AUTOMATED TRUCK AND DRIVER ASSIGNMENT
+            String assignedTruckId = null;
+            String assignedDriverId = null;
+            
+            // Only attempt auto-assignment if trashWeight is provided
+            if (paymentRequest.getTrashWeight() != null && paymentRequest.getTrashWeight() > 0) {
+                log.info("Attempting automated truck assignment for weight: {} kg", paymentRequest.getTrashWeight());
+                
+                try {
+                    // Find available trucks that can handle the weight
+                    List<Truck> availableTrucks = truckService.findAvailableTrucksByCapacity(
+                        paymentRequest.getTrashWeight(), 
+                        paymentRequest.getWasteType()
+                    );
+                    
+                    if (!availableTrucks.isEmpty()) {
+                        // Select the first truck (smallest sufficient capacity due to sorting)
+                        Truck selectedTruck = availableTrucks.get(0);
+                        assignedTruckId = selectedTruck.getTruckId();
+                        assignedDriverId = selectedTruck.getDriverId();
+                        
+                        log.info("Auto-assigned truck: {} (capacity: {} kg) and driver: {} for payment: {}", 
+                            assignedTruckId, selectedTruck.getCapacity(), assignedDriverId, paymentId);
+                    } else {
+                        log.warn("No available trucks found for weight: {} kg and waste type: {}", 
+                            paymentRequest.getTrashWeight(), paymentRequest.getWasteType());
+                    }
+                } catch (Exception e) {
+                    log.error("Error during automated truck assignment: {}", e.getMessage(), e);
+                    // Continue with payment creation even if auto-assignment fails
+                }
+            }
 
             Payment payment = Payment.builder()
                     .id(paymentId)
@@ -230,12 +265,35 @@ public class PaymentService {
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
                     .wasteType(paymentRequest.getWasteType())
-                    .truckId(paymentRequest.getTruckId())
-                    .jobOrderStatus("Available")
+                    .trashWeight(paymentRequest.getTrashWeight())
+                    .truckId(assignedTruckId != null ? assignedTruckId : paymentRequest.getTruckId())
+                    .driverId(assignedDriverId)
+                    .jobOrderStatus(assignedTruckId != null ? "NEW" : "Available")
                     .build();
 
             // Save the payment to Firestore
             firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            
+            // Send notification to assigned driver if auto-assignment was successful
+            if (assignedDriverId != null) {
+                try {
+                    Map<String, String> notificationData = new HashMap<>();
+                    notificationData.put("paymentId", paymentId);
+                    notificationData.put("type", "NEW_JOB_ASSIGNMENT");
+                    
+                    notificationService.sendNotificationToUser(
+                        assignedDriverId,
+                        "New Job Assignment",
+                        "You have been automatically assigned to a new pickup order at " + payment.getAddress(),
+                        notificationData
+                    );
+                    
+                    log.info("Notification sent to assigned driver: {}", assignedDriverId);
+                } catch (Exception e) {
+                    log.error("Failed to send notification to driver: {}", e.getMessage(), e);
+                    // Don't fail the payment creation if notification fails
+                }
+            }
 
             // Return the response
             return PaymentResponseDTO.builder()
@@ -255,9 +313,13 @@ public class PaymentService {
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
                     .wasteType(payment.getWasteType())
+                    .trashWeight(payment.getTrashWeight())
                     .truckId(payment.getTruckId())
+                    .driverId(payment.getDriverId())
                     .jobOrderStatus(payment.getJobOrderStatus())
-                    .message("Payment processed successfully")
+                    .message(assignedTruckId != null ? 
+                        "Payment processed successfully with automated truck and driver assignment" : 
+                        "Payment processed successfully")
                     .build();
 
         } catch (Exception e) {
@@ -414,6 +476,7 @@ public class PaymentService {
                 .phoneNumber(payment.getPhoneNumber())
                 .driverId(payment.getDriverId())
                 .wasteType(payment.getWasteType())
+                .trashWeight(payment.getTrashWeight())
                 .truckId(payment.getTruckId())
                 .jobOrderStatus(payment.getJobOrderStatus())
                 .isDelivered(payment.getIsDelivered())

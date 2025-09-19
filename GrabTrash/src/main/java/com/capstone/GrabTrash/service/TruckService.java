@@ -405,4 +405,81 @@ public class TruckService {
             throw new RuntimeException("Failed to get unassigned trucks: " + e.getMessage());
         }
     }
+    
+    /**
+     * Find available trucks that can handle the specified weight
+     * @param requiredCapacity Minimum capacity required in kilograms
+     * @param wasteType Type of waste (for filtering compatible trucks)
+     * @return List of available trucks with sufficient capacity
+     */
+    public List<Truck> findAvailableTrucksByCapacity(double requiredCapacity, String wasteType) {
+        try {
+            CollectionReference trucksCollection = firestore.collection(COLLECTION_NAME);
+            
+            // First, get trucks with "AVAILABLE" status
+            Query availableQuery = trucksCollection.whereEqualTo("status", "AVAILABLE");
+            ApiFuture<QuerySnapshot> availableFuture = availableQuery.get();
+            List<Truck> availableTrucks = availableFuture.get().toObjects(Truck.class);
+            
+            // Filter trucks that:
+            // 1. Have sufficient capacity
+            // 2. Are not assigned to any payment/order (no truckId references in payments)
+            // 3. Match the waste type (if specified)
+            // 4. Have an assigned driver
+            return availableTrucks.stream()
+                .filter(truck -> {
+                    // Check capacity
+                    if (truck.getCapacity() == null || truck.getCapacity() < requiredCapacity) {
+                        return false;
+                    }
+                    
+                    // Check if truck has a driver assigned
+                    if (truck.getDriverId() == null || truck.getDriverId().isEmpty()) {
+                        return false;
+                    }
+                    
+                    // Check waste type compatibility (if specified)
+                    if (wasteType != null && !wasteType.isEmpty() && 
+                        truck.getWasteType() != null && !truck.getWasteType().isEmpty()) {
+                        // If both have waste types, they should match
+                        return truck.getWasteType().equalsIgnoreCase(wasteType);
+                    }
+                    
+                    // Check if truck is not currently assigned to any active payment
+                    return !isTruckAssignedToActivePayment(truck.getTruckId());
+                })
+                .sorted((t1, t2) -> {
+                    // Sort by capacity (smallest sufficient capacity first for optimal assignment)
+                    return Double.compare(t1.getCapacity(), t2.getCapacity());
+                })
+                .collect(java.util.stream.Collectors.toList());
+                
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error finding available trucks by capacity", e);
+            throw new RuntimeException("Failed to find available trucks: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Check if a truck is currently assigned to any active payment
+     * @param truckId Truck ID to check
+     * @return true if truck is assigned to an active payment, false otherwise
+     */
+    private boolean isTruckAssignedToActivePayment(String truckId) {
+        try {
+            // Query payments collection to see if this truck is assigned to any active payment
+            CollectionReference paymentsCollection = firestore.collection("payments");
+            Query query = paymentsCollection.whereEqualTo("truckId", truckId);
+            ApiFuture<QuerySnapshot> future = query.get();
+            List<Object> payments = future.get().toObjects(Object.class);
+            
+            // If there are any payments with this truck ID, it's considered assigned
+            return !payments.isEmpty();
+            
+        } catch (Exception e) {
+            log.warn("Error checking truck assignment status for truck: {}", truckId, e);
+            // In case of error, assume truck is assigned to be safe
+            return true;
+        }
+    }
 } 
