@@ -23,6 +23,8 @@ public class TruckResponseDTO {
     private String model;  // Truck model (e.g., Dyna, Elf, etc.)
     private String plateNumber; // License plate number
     private Double truckPrice; // Price for the truck based on size
+    private Double capacity; // Truck capacity in cubic meters or tons
+    private String driverId; // ID of the assigned driver
     private Date createdAt;
     private Date updatedAt;
     private String message;

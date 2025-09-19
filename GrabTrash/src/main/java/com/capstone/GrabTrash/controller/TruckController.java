@@ -3,6 +3,7 @@ package com.capstone.GrabTrash.controller;
 import com.capstone.GrabTrash.dto.TruckRequestDTO;
 import com.capstone.GrabTrash.dto.TruckResponseDTO;
 import com.capstone.GrabTrash.dto.TruckAssignmentDTO;
+import com.capstone.GrabTrash.dto.DriverTruckAssignmentDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
 import com.capstone.GrabTrash.service.TruckService;
 import com.capstone.GrabTrash.service.PaymentService;
@@ -103,6 +104,8 @@ public class TruckController {
                 .make(existingTruck.getMake())
                 .model(existingTruck.getModel())
                 .plateNumber(existingTruck.getPlateNumber())
+                .capacity(existingTruck.getCapacity())
+                .driverId(existingTruck.getDriverId())
                 .truckPrice(truckRequest.getTruckPrice())
                 .build();
             
@@ -177,5 +180,56 @@ public class TruckController {
     public ResponseEntity<PaymentResponseDTO> releaseTruckFromPayment(@PathVariable String paymentId) {
         PaymentResponseDTO response = paymentService.releaseTruckFromPayment(paymentId);
         return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Assign a driver to a truck
+     * Requires JWT authentication with admin role
+     * @param assignment Driver-truck assignment information
+     * @return Updated truck response
+     */
+    @PostMapping("/assign-driver")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TruckResponseDTO> assignDriverToTruck(@RequestBody DriverTruckAssignmentDTO assignment) {
+        TruckResponseDTO response = truckService.assignDriverToTruck(assignment.getTruckId(), assignment.getDriverId());
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Remove driver assignment from a truck
+     * Requires JWT authentication with admin role
+     * @param truckId ID of the truck to remove driver from
+     * @return Updated truck response
+     */
+    @DeleteMapping("/remove-driver/{truckId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TruckResponseDTO> removeDriverFromTruck(@PathVariable String truckId) {
+        TruckResponseDTO response = truckService.removeDriverFromTruck(truckId);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Get trucks assigned to a specific driver
+     * Requires JWT authentication with admin role
+     * @param driverId Driver ID
+     * @return List of trucks assigned to the driver
+     */
+    @GetMapping("/driver/{driverId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<TruckResponseDTO>> getTrucksByDriverId(@PathVariable String driverId) {
+        List<TruckResponseDTO> trucks = truckService.getTrucksByDriverId(driverId);
+        return ResponseEntity.ok(trucks);
+    }
+    
+    /**
+     * Get trucks with no assigned driver
+     * Requires JWT authentication with admin role
+     * @return List of unassigned trucks
+     */
+    @GetMapping("/unassigned")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<TruckResponseDTO>> getUnassignedTrucks() {
+        List<TruckResponseDTO> trucks = truckService.getUnassignedTrucks();
+        return ResponseEntity.ok(trucks);
     }
 } 

@@ -3,6 +3,7 @@ package com.capstone.GrabTrash.service;
 import com.capstone.GrabTrash.dto.TruckRequestDTO;
 import com.capstone.GrabTrash.dto.TruckResponseDTO;
 import com.capstone.GrabTrash.model.Truck;
+import com.capstone.GrabTrash.model.User;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.Firestore;
@@ -28,10 +29,12 @@ public class TruckService {
     private static final String COLLECTION_NAME = "trucks";
 
     private final Firestore firestore;
+    private final UserService userService;
 
     @Autowired
-    public TruckService(Firestore firestore) {
+    public TruckService(Firestore firestore, UserService userService) {
         this.firestore = firestore;
+        this.userService = userService;
     }
 
     /**
@@ -53,6 +56,8 @@ public class TruckService {
                     .model(truckRequest.getModel())
                     .plateNumber(truckRequest.getPlateNumber())
                     .truckPrice(truckRequest.getTruckPrice())
+                    .capacity(truckRequest.getCapacity())
+                    .driverId(truckRequest.getDriverId())
                     .createdAt(new Date())
                     .updatedAt(new Date())
                     .build();
@@ -150,6 +155,16 @@ public class TruckService {
                 existingTruck.setTruckPrice(truckRequest.getTruckPrice());
             }
             
+            // Update capacity if provided
+            if (truckRequest.getCapacity() != null) {
+                existingTruck.setCapacity(truckRequest.getCapacity());
+            }
+            
+            // Update driverId if provided
+            if (truckRequest.getDriverId() != null) {
+                existingTruck.setDriverId(truckRequest.getDriverId());
+            }
+            
             existingTruck.setUpdatedAt(new Date());
 
             // Save the updated truck to Firestore
@@ -242,6 +257,8 @@ public class TruckService {
                 .model(truck.getModel())
                 .plateNumber(truck.getPlateNumber())
                 .truckPrice(truck.getTruckPrice())
+                .capacity(truck.getCapacity())
+                .driverId(truck.getDriverId())
                 .createdAt(truck.getCreatedAt())
                 .updatedAt(truck.getUpdatedAt())
                 .message(message)
@@ -259,5 +276,133 @@ public class TruckService {
             responseDTOs.add(mapToResponseDTO(truck, "Truck retrieved successfully"));
         }
         return responseDTOs;
+    }
+    
+    /**
+     * Assign a driver to a truck
+     * @param truckId Truck ID
+     * @param driverId Driver ID to assign
+     * @return Updated truck response
+     */
+    public TruckResponseDTO assignDriverToTruck(String truckId, String driverId) {
+        try {
+            // Validate truck exists
+            Truck truck = firestore.collection(COLLECTION_NAME).document(truckId).get().get().toObject(Truck.class);
+            if (truck == null) {
+                throw new RuntimeException("Truck not found with ID: " + truckId);
+            }
+            
+            // Check if truck already has a driver assigned
+            if (truck.getDriverId() != null && !truck.getDriverId().isEmpty()) {
+                throw new RuntimeException("Truck already has a driver assigned. Driver ID: " + truck.getDriverId());
+            }
+            
+            // Validate driver exists and is actually a driver
+            User driver = userService.getUserById(driverId);
+            if (driver == null) {
+                throw new RuntimeException("Driver not found with ID: " + driverId);
+            }
+            if (!"DRIVER".equalsIgnoreCase(driver.getRole())) {
+                throw new RuntimeException("User is not a driver. User role: " + driver.getRole());
+            }
+            
+            // Check if driver is already assigned to another truck
+            CollectionReference trucksCollection = firestore.collection(COLLECTION_NAME);
+            Query driverQuery = trucksCollection.whereEqualTo("driverId", driverId);
+            ApiFuture<QuerySnapshot> future = driverQuery.get();
+            List<Truck> existingAssignments = future.get().toObjects(Truck.class);
+            
+            if (!existingAssignments.isEmpty()) {
+                throw new RuntimeException("Driver is already assigned to another truck. Truck ID: " + existingAssignments.get(0).getTruckId());
+            }
+            
+            // Assign driver to truck
+            truck.setDriverId(driverId);
+            truck.setUpdatedAt(new Date());
+            
+            // Save updated truck
+            firestore.collection(COLLECTION_NAME).document(truckId).set(truck);
+            
+            return mapToResponseDTO(truck, "Driver assigned to truck successfully");
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error assigning driver to truck", e);
+            throw new RuntimeException("Failed to assign driver to truck: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Remove driver assignment from a truck
+     * @param truckId Truck ID
+     * @return Updated truck response
+     */
+    public TruckResponseDTO removeDriverFromTruck(String truckId) {
+        try {
+            // Validate truck exists
+            Truck truck = firestore.collection(COLLECTION_NAME).document(truckId).get().get().toObject(Truck.class);
+            if (truck == null) {
+                throw new RuntimeException("Truck not found with ID: " + truckId);
+            }
+            
+            // Check if truck has a driver assigned
+            if (truck.getDriverId() == null || truck.getDriverId().isEmpty()) {
+                throw new RuntimeException("No driver is currently assigned to this truck");
+            }
+            
+            // Remove driver assignment
+            truck.setDriverId(null);
+            truck.setUpdatedAt(new Date());
+            
+            // Save updated truck
+            firestore.collection(COLLECTION_NAME).document(truckId).set(truck);
+            
+            return mapToResponseDTO(truck, "Driver removed from truck successfully");
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error removing driver from truck", e);
+            throw new RuntimeException("Failed to remove driver from truck: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get trucks by driver ID
+     * @param driverId Driver ID
+     * @return List of trucks assigned to the driver
+     */
+    public List<TruckResponseDTO> getTrucksByDriverId(String driverId) {
+        try {
+            CollectionReference trucksCollection = firestore.collection(COLLECTION_NAME);
+            Query query = trucksCollection.whereEqualTo("driverId", driverId);
+            ApiFuture<QuerySnapshot> future = query.get();
+            List<Truck> trucks = future.get().toObjects(Truck.class);
+            return mapToResponseDTOList(trucks);
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error getting trucks by driver ID", e);
+            throw new RuntimeException("Failed to get trucks for driver: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get trucks with no assigned driver
+     * @return List of trucks with no driver assigned
+     */
+    public List<TruckResponseDTO> getUnassignedTrucks() {
+        try {
+            CollectionReference trucksCollection = firestore.collection(COLLECTION_NAME);
+            Query query = trucksCollection.whereEqualTo("driverId", null);
+            ApiFuture<QuerySnapshot> future = query.get();
+            List<Truck> trucks = future.get().toObjects(Truck.class);
+            
+            // Also check for trucks with empty string as driverId
+            Query emptyQuery = trucksCollection.whereEqualTo("driverId", "");
+            ApiFuture<QuerySnapshot> emptyFuture = emptyQuery.get();
+            List<Truck> emptyTrucks = emptyFuture.get().toObjects(Truck.class);
+            
+            trucks.addAll(emptyTrucks);
+            return mapToResponseDTOList(trucks);
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error getting unassigned trucks", e);
+            throw new RuntimeException("Failed to get unassigned trucks: " + e.getMessage());
+        }
     }
 } 
