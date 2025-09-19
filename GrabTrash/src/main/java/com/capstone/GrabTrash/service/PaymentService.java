@@ -301,7 +301,7 @@ public class PaymentService {
                     .trashWeight(paymentRequest.getTrashWeight())
                     .truckId(assignedTruckId != null ? assignedTruckId : paymentRequest.getTruckId())
                     .driverId(assignedDriverId)
-                    .jobOrderStatus(assignedTruckId != null ? "NEW" : "Available")
+                    .jobOrderStatus(assignedTruckId != null ? "Available" : "Available")
                     .build();
 
             // Save the payment to Firestore
