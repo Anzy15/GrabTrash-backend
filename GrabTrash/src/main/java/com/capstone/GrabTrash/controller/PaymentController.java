@@ -3,6 +3,8 @@ package com.capstone.GrabTrash.controller;
 import com.capstone.GrabTrash.dto.DashboardStatsDTO;
 import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
+import com.capstone.GrabTrash.dto.QuoteRequestDTO;
+import com.capstone.GrabTrash.dto.QuoteResponseDTO;
 import com.capstone.GrabTrash.dto.DriverAssignmentDTO;
 import com.capstone.GrabTrash.dto.DeliveryStatusUpdateDTO;
 import com.capstone.GrabTrash.dto.JobOrderStatusUpdateDTO;
@@ -29,6 +31,19 @@ public class PaymentController {
     @Autowired
     public PaymentController(PaymentService paymentService) {
         this.paymentService = paymentService;
+    }
+
+    /**
+     * Generate a quote with automated truck and driver assignment
+     * This endpoint provides pricing estimation and assignment details without creating a payment record
+     * Requires JWT authentication in the Authorization header
+     * @param quoteRequest Quote request information
+     * @return Quote with pricing and assignment details
+     */
+    @PostMapping("/quote")
+    public ResponseEntity<QuoteResponseDTO> generateQuote(@RequestBody QuoteRequestDTO quoteRequest) {
+        QuoteResponseDTO response = paymentService.generateQuote(quoteRequest);
+        return ResponseEntity.ok(response);
     }
 
     /**

@@ -3,6 +3,8 @@ package com.capstone.GrabTrash.service;
 import com.capstone.GrabTrash.dto.DashboardStatsDTO;
 import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
+import com.capstone.GrabTrash.dto.QuoteRequestDTO;
+import com.capstone.GrabTrash.dto.QuoteResponseDTO;
 import com.capstone.GrabTrash.dto.TruckResponseDTO;
 import com.capstone.GrabTrash.model.Payment;
 import com.capstone.GrabTrash.model.User;
@@ -187,6 +189,124 @@ public class PaymentService {
         if (paymentsListener != null) {
             log.info("Closing Firestore payments listener");
             paymentsListener.remove();
+        }
+    }
+
+    /**
+     * Generate a quote with automated truck and driver assignment
+     * This method provides pricing estimation and truck/driver assignment without creating a payment record
+     * @param quoteRequest Quote request information
+     * @return Quote with pricing and assignment details
+     */
+    public QuoteResponseDTO generateQuote(QuoteRequestDTO quoteRequest) {
+        try {
+            log.info("Generating quote for customer: {}, weight: {} kg, waste type: {}", 
+                quoteRequest.getCustomerEmail(), quoteRequest.getTrashWeight(), quoteRequest.getWasteType());
+
+            String quoteId = UUID.randomUUID().toString();
+            String assignedTruckId = null;
+            String assignedDriverId = null;
+            Double estimatedAmount = 0.0;
+            Double estimatedTotalAmount = 0.0;
+            String truckDetails = null;
+            String driverDetails = null;
+            Double truckCapacity = null;
+            Boolean automationSuccess = false;
+            String message = "Quote generated successfully";
+
+            // Only attempt auto-assignment if trashWeight is provided
+            if (quoteRequest.getTrashWeight() != null && quoteRequest.getTrashWeight() > 0) {
+                log.info("Attempting automated truck assignment for quote - weight: {} kg, waste type: {}", 
+                    quoteRequest.getTrashWeight(), quoteRequest.getWasteType());
+                
+                try {
+                    // Find available trucks that can handle the weight
+                    List<Truck> availableTrucks = truckService.findAvailableTrucksByCapacity(
+                        quoteRequest.getTrashWeight(), 
+                        quoteRequest.getWasteType()
+                    );
+                    
+                    log.info("Found {} available trucks for quote assignment", availableTrucks.size());
+                    
+                    if (!availableTrucks.isEmpty()) {
+                        // Select the first truck (smallest sufficient capacity due to sorting)
+                        Truck selectedTruck = availableTrucks.get(0);
+                        assignedTruckId = selectedTruck.getTruckId();
+                        assignedDriverId = selectedTruck.getDriverId();
+                        truckCapacity = selectedTruck.getCapacity();
+                        
+                        // Get truck details
+                        truckDetails = String.format("Truck: %s (Capacity: %.1f kg, Type: %s)", 
+                            selectedTruck.getTruckId(), 
+                            selectedTruck.getCapacity(), 
+                            selectedTruck.getWasteType());
+                        
+                        // Get driver details if available
+                        if (assignedDriverId != null) {
+                            try {
+                                User driver = userService.getUserById(assignedDriverId);
+                                if (driver != null) {
+                                    String driverName = (driver.getFirstName() != null ? driver.getFirstName() : "") + 
+                                                       (driver.getLastName() != null ? " " + driver.getLastName() : "");
+                                    driverDetails = String.format("Driver: %s", driverName.trim());
+                                }
+                            } catch (Exception e) {
+                                log.warn("Could not fetch driver details for ID: {}", assignedDriverId);
+                                driverDetails = "Driver: Assigned";
+                            }
+                        }
+                        
+                        // Calculate pricing based on truck price
+                        if (selectedTruck.getTruckPrice() != null && selectedTruck.getTruckPrice() > 0) {
+                            estimatedAmount = selectedTruck.getTruckPrice();
+                            estimatedTotalAmount = selectedTruck.getTruckPrice(); // Base truck price without service fee
+                            
+                            log.info("Quote pricing - Amount: {}, Total Amount: {} based on truck price: {}", 
+                                estimatedAmount, estimatedTotalAmount, selectedTruck.getTruckPrice());
+                        } else {
+                            log.warn("Selected truck {} has no price set for quote", assignedTruckId);
+                            estimatedAmount = 0.0;
+                            estimatedTotalAmount = 0.0;
+                        }
+                        
+                        automationSuccess = true;
+                        message = "Quote generated successfully with automated truck and driver assignment";
+                        
+                        log.info("Quote auto-assigned truck: {} (capacity: {} kg, price: {}) and driver: {} for quote: {}", 
+                            assignedTruckId, selectedTruck.getCapacity(), selectedTruck.getTruckPrice(), assignedDriverId, quoteId);
+                    } else {
+                        log.warn("No available trucks found for quote - weight: {} kg and waste type: {}. Quote will be generated without assignment.", 
+                            quoteRequest.getTrashWeight(), quoteRequest.getWasteType());
+                        message = "Quote generated but no trucks available for automatic assignment";
+                    }
+                } catch (Exception e) {
+                    log.error("Error during automated truck assignment for quote: {}", e.getMessage(), e);
+                    message = "Quote generated but automation failed: " + e.getMessage();
+                }
+            } else {
+                log.info("Skipping automated truck assignment for quote - trashWeight not provided or invalid: {}", 
+                    quoteRequest.getTrashWeight());
+                message = "Quote generated but automated assignment skipped due to missing trash weight";
+            }
+
+            return QuoteResponseDTO.builder()
+                    .quoteId(quoteId)
+                    .estimatedAmount(estimatedAmount)
+                    .estimatedTotalAmount(estimatedTotalAmount)
+                    .assignedTruckId(assignedTruckId)
+                    .assignedDriverId(assignedDriverId)
+                    .truckDetails(truckDetails)
+                    .driverDetails(driverDetails)
+                    .truckCapacity(truckCapacity)
+                    .automationSuccess(automationSuccess)
+                    .wasteType(quoteRequest.getWasteType())
+                    .trashWeight(quoteRequest.getTrashWeight())
+                    .message(message)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error generating quote", e);
+            throw new RuntimeException("Failed to generate quote: " + e.getMessage());
         }
     }
 

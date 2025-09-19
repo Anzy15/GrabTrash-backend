@@ -29,4 +29,5 @@ public class PaymentRequestDTO {
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
     private Double trashWeight; // Weight of trash in kilograms
     private String truckId;    // ID of the selected truck
+    private String quoteId;    // Optional: Reference to the quote that generated this payment
 }
