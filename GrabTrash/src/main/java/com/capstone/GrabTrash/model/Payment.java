@@ -41,6 +41,7 @@ public class Payment {
     private Boolean isDelivered;  // Whether the waste has been delivered to the disposal facility
     private String customerConfirmation;  // Customer confirmation proof image URL
     private String driverConfirmation;  // Driver confirmation proof image URL
+    private Integer serviceRating;  // Customer service rating (1-5 stars)
     
     // Pre-persist hook to set dates
     public void prePersist() {
@@ -133,5 +134,15 @@ public class Payment {
     @PropertyName("driverConfirmation")
     public void setDriverConfirmation(String driverConfirmation) {
         this.driverConfirmation = driverConfirmation;
+    }
+    
+    @PropertyName("serviceRating")
+    public Integer getServiceRating() {
+        return serviceRating;
+    }
+
+    @PropertyName("serviceRating")
+    public void setServiceRating(Integer serviceRating) {
+        this.serviceRating = serviceRating;
     }
 }

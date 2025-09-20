@@ -40,4 +40,5 @@ public class PaymentResponseDTO {
     private Boolean isDelivered;  // Whether the waste has been delivered to the disposal facility
     private String customerConfirmation;  // Customer confirmation proof image URL
     private String driverConfirmation;  // Driver confirmation proof image URL
+    private Integer serviceRating;  // Customer service rating (1-5 stars)
 }

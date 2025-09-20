@@ -637,6 +637,7 @@ public class PaymentService {
                 .isDelivered(payment.getIsDelivered())
                 .customerConfirmation(payment.getCustomerConfirmation())
                 .driverConfirmation(payment.getDriverConfirmation())
+                .serviceRating(payment.getServiceRating())
                 .message("Payment retrieved successfully")
                 .build();
     }
@@ -1361,6 +1362,85 @@ public class PaymentService {
         } catch (InterruptedException | ExecutionException e) {
             log.error("Error uploading confirmation image for payment ID: {}", paymentId, e);
             throw new RuntimeException("Failed to upload confirmation image: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Update service rating for a payment by customer
+     * Only the customer who owns the payment can update the rating
+     * @param orderId Order ID to identify the payment
+     * @param serviceRating Service rating (1-5 stars)
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO updateServiceRating(String orderId, Integer serviceRating) {
+        try {
+            log.info("Updating service rating for order ID: {} to rating: {}", orderId, serviceRating);
+            
+            // Get the current user from security context
+            String currentUserEmail = getCurrentUserEmail();
+            if (currentUserEmail == null) {
+                throw new RuntimeException("Unable to determine current user");
+            }
+            
+            // Get the payment by order ID
+            Payment payment = getPaymentByOrderIdInternal(orderId);
+            if (payment == null) {
+                log.error("Payment not found with order ID: {}", orderId);
+                throw new RuntimeException("Payment not found with order ID: " + orderId);
+            }
+            
+            // Authorization check: ensure the current user is the customer who owns this payment
+            if (!currentUserEmail.equals(payment.getCustomerEmail())) {
+                log.error("Unauthorized attempt to update service rating. Current user: {}, Payment owner: {}", 
+                    currentUserEmail, payment.getCustomerEmail());
+                throw new RuntimeException("You are not authorized to rate this order");
+            }
+            
+            log.debug("Authorization passed. Customer {} updating rating for their order {}", currentUserEmail, orderId);
+            
+            // Validate service rating
+            if (serviceRating == null || serviceRating < 1 || serviceRating > 5) {
+                log.error("Invalid service rating: {}. Must be between 1 and 5", serviceRating);
+                throw new RuntimeException("Service rating must be between 1 and 5 stars");
+            }
+            
+            // Update the service rating
+            payment.setServiceRating(serviceRating);
+            payment.setUpdatedAt(new Date());
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(payment.getId()).set(payment);
+            log.info("Successfully updated service rating to: {} for order ID: {}", serviceRating, orderId);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (Exception e) {
+            log.error("Error updating service rating for order ID: {}", orderId, e);
+            throw new RuntimeException("Failed to update service rating: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Helper method to get payment by order ID without DTO mapping
+     * @param orderId Order ID
+     * @return Payment entity
+     */
+    private Payment getPaymentByOrderIdInternal(String orderId) {
+        try {
+            CollectionReference paymentsCollection = firestore.collection(COLLECTION_NAME);
+            Query query = paymentsCollection.whereEqualTo("orderId", orderId);
+            ApiFuture<QuerySnapshot> future = query.get();
+            List<Payment> payments = future.get().toObjects(Payment.class);
+            
+            if (payments.isEmpty()) {
+                return null;
+            }
+            
+            return payments.get(0);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error getting payment by order ID: {}", orderId, e);
+            return null;
         }
     }
     

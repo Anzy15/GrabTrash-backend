@@ -9,6 +9,7 @@ import com.capstone.GrabTrash.dto.DriverAssignmentDTO;
 import com.capstone.GrabTrash.dto.DeliveryStatusUpdateDTO;
 import com.capstone.GrabTrash.dto.JobOrderStatusUpdateDTO;
 import com.capstone.GrabTrash.dto.ImageConfirmationDTO;
+import com.capstone.GrabTrash.dto.ServiceRatingUpdateDTO;
 import com.capstone.GrabTrash.service.PaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -207,6 +208,27 @@ public class PaymentController {
         PaymentResponseDTO updatedPayment = paymentService.uploadConfirmationImage(
                 paymentId, 
                 imageRequest.getImageUrl());
+        
+        return ResponseEntity.ok(updatedPayment);
+    }
+
+    /**
+     * Update service rating for an order/payment
+     * Only the customer who owns the order can update the rating
+     * Requires JWT authentication with customer role
+     * @param orderId Order ID to identify the payment
+     * @param ratingRequest Service rating update request
+     * @return Updated payment response
+     */
+    @PutMapping("/order/{orderId}/rating")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<PaymentResponseDTO> updateServiceRating(
+            @PathVariable String orderId,
+            @RequestBody ServiceRatingUpdateDTO ratingRequest) {
+        
+        PaymentResponseDTO updatedPayment = paymentService.updateServiceRating(
+                orderId, 
+                ratingRequest.getServiceRating());
         
         return ResponseEntity.ok(updatedPayment);
     }
