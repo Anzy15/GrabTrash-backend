@@ -270,6 +270,7 @@ public class UserService {
             existingUser.setFirstName(user.getFirstName());
             existingUser.setLastName(user.getLastName());
             existingUser.setEmail(user.getEmail());
+            existingUser.setPhoneNumber(user.getPhoneNumber());
 
             // Update Firestore
             firestore.collection("users").document(userId).set(existingUser).get();
