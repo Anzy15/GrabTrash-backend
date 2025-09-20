@@ -301,6 +301,7 @@ public class PaymentService {
                     .automationSuccess(automationSuccess)
                     .wasteType(quoteRequest.getWasteType())
                     .trashWeight(quoteRequest.getTrashWeight())
+                    .phoneNumber(quoteRequest.getPhoneNumber())
                     .notes(quoteRequest.getNotes())
                     .message(message)
                     .build();
@@ -333,6 +334,9 @@ public class PaymentService {
             }
             if (paymentRequest.getBarangayId() != null) {
                 barangayId = paymentRequest.getBarangayId(); // allow override if provided
+            }
+            if (paymentRequest.getPhoneNumber() != null) {
+                phoneNumber = paymentRequest.getPhoneNumber(); // allow override if provided
             }
             
             // AUTOMATED TRUCK AND DRIVER ASSIGNMENT
@@ -372,8 +376,20 @@ public class PaymentService {
                             log.warn("Selected truck {} has no price set, using request amounts", assignedTruckId);
                         }
                         
+                        // UPDATE TRUCK STATUS TO "CURRENTLY_IN_USE"
+                        try {
+                            selectedTruck.setStatus("CURRENTLY_IN_USE");
+                            selectedTruck.setUpdatedAt(new Date());
+                            firestore.collection("trucks").document(assignedTruckId).set(selectedTruck);
+                            log.info("Updated truck {} status to CURRENTLY_IN_USE", assignedTruckId);
+                        } catch (Exception truckUpdateEx) {
+                            log.error("Failed to update truck status for truck {}: {}", assignedTruckId, truckUpdateEx.getMessage());
+                            // Don't fail the payment creation if truck status update fails
+                        }
+                        
                         log.info("Auto-assigned truck: {} (capacity: {} kg, price: {}) and driver: {} for payment: {}", 
                             assignedTruckId, selectedTruck.getCapacity(), selectedTruck.getTruckPrice(), assignedDriverId, paymentId);
+
                     } else {
                         log.warn("No available trucks found for weight: {} kg and waste type: {}. Payment will be created without assignment.", 
                             paymentRequest.getTrashWeight(), paymentRequest.getWasteType());
@@ -463,6 +479,7 @@ public class PaymentService {
                     .totalAmount(payment.getTotalAmount())
                     .paymentMethod(payment.getPaymentMethod())
                     .paymentReference(payment.getPaymentReference())
+                    .notes(payment.getNotes())
                     .createdAt(payment.getCreatedAt())
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
@@ -1027,6 +1044,29 @@ public class PaymentService {
             // Update the delivery status
             payment.setIsDelivered(isDelivered);
             payment.setUpdatedAt(new Date());
+            
+            // If delivery is marked as true, release the truck (set status back to AVAILABLE)
+            if (Boolean.TRUE.equals(isDelivered) && payment.getTruckId() != null) {
+                String truckId = payment.getTruckId();
+                log.info("Delivery completed, releasing truck: {}", truckId);
+                
+                try {
+                    Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
+                    
+                    if (truck != null) {
+                        // Update truck status back to AVAILABLE
+                        truck.setStatus("AVAILABLE");
+                        truck.setUpdatedAt(new Date());
+                        firestore.collection("trucks").document(truckId).set(truck);
+                        log.info("Successfully updated truck {} status back to AVAILABLE", truckId);
+                    } else {
+                        log.warn("Truck with ID {} not found when trying to release it", truckId);
+                    }
+                } catch (Exception truckUpdateEx) {
+                    log.error("Failed to update truck status for truck {}: {}", truckId, truckUpdateEx.getMessage());
+                    // Don't fail the delivery status update if truck status update fails
+                }
+            }
             
             // Save the updated payment
             firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);

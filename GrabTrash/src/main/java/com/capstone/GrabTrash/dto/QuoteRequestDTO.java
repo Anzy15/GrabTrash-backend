@@ -19,7 +19,8 @@ public class QuoteRequestDTO {
     private Double latitude;
     private Double longitude;
     private String barangayId;
-    private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
-    private Double trashWeight; // Weight of trash in kilograms
-    private String notes;      // Additional notes or special instructions
+    private String phoneNumber;   // Customer phone number
+    private String wasteType;     // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
+    private Double trashWeight;   // Weight of trash in kilograms
+    private String notes;         // Additional notes or special instructions
 }
