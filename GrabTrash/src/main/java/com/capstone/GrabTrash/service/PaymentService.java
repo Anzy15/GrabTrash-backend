@@ -301,6 +301,7 @@ public class PaymentService {
                     .automationSuccess(automationSuccess)
                     .wasteType(quoteRequest.getWasteType())
                     .trashWeight(quoteRequest.getTrashWeight())
+                    .notes(quoteRequest.getNotes())
                     .message(message)
                     .build();
 
@@ -619,6 +620,7 @@ public class PaymentService {
                 .paymentReference(payment.getPaymentReference())
                 .amount(payment.getAmount())
                 .totalAmount(payment.getTotalAmount() != null ? payment.getTotalAmount() : payment.getAmount())
+                .notes(payment.getNotes())
                 .createdAt(payment.getCreatedAt())
                 .barangayId(payment.getBarangayId())
                 .customerName(payment.getCustomerName())

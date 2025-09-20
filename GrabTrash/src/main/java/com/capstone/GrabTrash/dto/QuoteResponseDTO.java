@@ -26,4 +26,5 @@ public class QuoteResponseDTO {
     private Boolean automationSuccess; // Whether automation was successful
     private String wasteType;         // Confirmed waste type
     private Double trashWeight;       // Confirmed trash weight
+    private String notes;             // Customer notes or special instructions
 }

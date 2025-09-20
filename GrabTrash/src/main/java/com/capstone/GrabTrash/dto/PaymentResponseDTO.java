@@ -32,6 +32,7 @@ public class PaymentResponseDTO {
     private String driverId;
     private double amount;
     private double totalAmount;
+    private String notes;          // Customer notes or special instructions
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
     private Double trashWeight; // Weight of trash in kilograms
     private String truckId;    // ID of the assigned truck

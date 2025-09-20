@@ -21,4 +21,5 @@ public class QuoteRequestDTO {
     private String barangayId;
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
     private Double trashWeight; // Weight of trash in kilograms
+    private String notes;      // Additional notes or special instructions
 }
