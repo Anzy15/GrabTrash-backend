@@ -23,6 +23,9 @@ public class Truck {
     private String make;   // Truck manufacturer (e.g., Toyota, Isuzu, etc.)
     private String model;  // Truck model (e.g., Dyna, Elf, etc.)
     private String plateNumber; // License plate number
+    private Double truckPrice; // Price for the truck based on size
+    private Double capacity; // Truck capacity in cubic meters or tons
+    private String driverId; // ID of the assigned driver
     private Date createdAt;
     private Date updatedAt;
     
@@ -104,6 +107,16 @@ public class Truck {
         this.plateNumber = plateNumber;
     }
 
+    @PropertyName("truckPrice")
+    public Double getTruckPrice() {
+        return truckPrice;
+    }
+
+    @PropertyName("truckPrice")
+    public void setTruckPrice(Double truckPrice) {
+        this.truckPrice = truckPrice;
+    }
+
     @PropertyName("createdAt")
     public Date getCreatedAt() {
         return createdAt;
@@ -122,5 +135,25 @@ public class Truck {
     @PropertyName("updatedAt")
     public void setUpdatedAt(Date updatedAt) {
         this.updatedAt = updatedAt;
+    }
+    
+    @PropertyName("capacity")
+    public Double getCapacity() {
+        return capacity;
+    }
+
+    @PropertyName("capacity")
+    public void setCapacity(Double capacity) {
+        this.capacity = capacity;
+    }
+    
+    @PropertyName("driverId")
+    public String getDriverId() {
+        return driverId;
+    }
+
+    @PropertyName("driverId")
+    public void setDriverId(String driverId) {
+        this.driverId = driverId;
     }
 } 

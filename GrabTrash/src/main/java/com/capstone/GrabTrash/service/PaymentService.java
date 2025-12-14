@@ -3,6 +3,9 @@ package com.capstone.GrabTrash.service;
 import com.capstone.GrabTrash.dto.DashboardStatsDTO;
 import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
+import com.capstone.GrabTrash.dto.QuoteRequestDTO;
+import com.capstone.GrabTrash.dto.QuoteResponseDTO;
+import com.capstone.GrabTrash.dto.TruckResponseDTO;
 import com.capstone.GrabTrash.model.Payment;
 import com.capstone.GrabTrash.model.User;
 import com.capstone.GrabTrash.model.Truck;
@@ -16,6 +19,8 @@ import com.google.cloud.firestore.QuerySnapshot;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PreDestroy;
@@ -39,13 +44,15 @@ public class PaymentService {
 
     private final Firestore firestore;
     private final UserService userService;
+    private final TruckService truckService;
     private final NotificationService notificationService;
     private ListenerRegistration paymentsListener;
 
     @Autowired
-    public PaymentService(Firestore firestore, @Lazy UserService userService, NotificationService notificationService) {
+    public PaymentService(Firestore firestore, @Lazy UserService userService, TruckService truckService, NotificationService notificationService) {
         this.firestore = firestore;
         this.userService = userService;
+        this.truckService = truckService;
         this.notificationService = notificationService;
         
         // Initialize the Firestore listener for payments collection
@@ -85,14 +92,14 @@ public class PaymentService {
                                 
                                 // Check if the status is "Accepted" and handle notification
                                 String normalizedStatus = normalizeStatus(payment.getJobOrderStatus());
-                                if ("ACCEPTED".equals(normalizedStatus)) {
+                                if ("Accepted".equals(normalizedStatus)) {
                                     // Get the previous version of the document to check if status actually changed
                                     try {
                                         // Check if we've already sent a notification for this payment acceptance
                                         String notificationKey = "notification_sent_" + payment.getId();
                                         String cacheValue = getNotificationCache(notificationKey);
                                         
-                                        if (cacheValue != null && cacheValue.equals("ACCEPTED")) {
+                                        if (cacheValue != null && cacheValue.equals("Accepted")) {
                                             log.debug("Notification already sent for payment ID: {}, skipping", payment.getId());
                                             continue;
                                         }
@@ -101,7 +108,7 @@ public class PaymentService {
                                         sendAcceptedNotification(payment);
                                         
                                         // Mark this notification as sent to avoid duplicates
-                                        setNotificationCache(notificationKey, "ACCEPTED");
+                                        setNotificationCache(notificationKey, "Accepted");
                                     } catch (Exception ex) {
                                         log.error("Error processing status change for payment {}: {}", 
                                             payment.getId(), ex.getMessage(), ex);
@@ -186,6 +193,126 @@ public class PaymentService {
     }
 
     /**
+     * Generate a quote with automated truck and driver assignment
+     * This method provides pricing estimation and truck/driver assignment without creating a payment record
+     * @param quoteRequest Quote request information
+     * @return Quote with pricing and assignment details
+     */
+    public QuoteResponseDTO generateQuote(QuoteRequestDTO quoteRequest) {
+        try {
+            log.info("Generating quote for customer: {}, weight: {} kg, waste type: {}", 
+                quoteRequest.getCustomerEmail(), quoteRequest.getTrashWeight(), quoteRequest.getWasteType());
+
+            String quoteId = UUID.randomUUID().toString();
+            String assignedTruckId = null;
+            String assignedDriverId = null;
+            Double estimatedAmount = 0.0;
+            Double estimatedTotalAmount = 0.0;
+            String truckDetails = null;
+            String driverDetails = null;
+            Double truckCapacity = null;
+            Boolean automationSuccess = false;
+            String message = "Quote generated successfully";
+
+            // Only attempt auto-assignment if trashWeight is provided
+            if (quoteRequest.getTrashWeight() != null && quoteRequest.getTrashWeight() > 0) {
+                log.info("Attempting automated truck assignment for quote - weight: {} kg, waste type: {}", 
+                    quoteRequest.getTrashWeight(), quoteRequest.getWasteType());
+                
+                try {
+                    // Find available trucks that can handle the weight
+                    List<Truck> availableTrucks = truckService.findAvailableTrucksByCapacity(
+                        quoteRequest.getTrashWeight(), 
+                        quoteRequest.getWasteType()
+                    );
+                    
+                    log.info("Found {} available trucks for quote assignment", availableTrucks.size());
+                    
+                    if (!availableTrucks.isEmpty()) {
+                        // Select the first truck (smallest sufficient capacity due to sorting)
+                        Truck selectedTruck = availableTrucks.get(0);
+                        assignedTruckId = selectedTruck.getTruckId();
+                        assignedDriverId = selectedTruck.getDriverId();
+                        truckCapacity = selectedTruck.getCapacity();
+                        
+                        // Get truck details
+                        truckDetails = String.format("Truck: %s (Capacity: %.1f kg, Type: %s)", 
+                            selectedTruck.getTruckId(), 
+                            selectedTruck.getCapacity(), 
+                            selectedTruck.getWasteType());
+                        
+                        // Get driver details if available
+                        if (assignedDriverId != null) {
+                            try {
+                                User driver = userService.getUserById(assignedDriverId);
+                                if (driver != null) {
+                                    String driverName = (driver.getFirstName() != null ? driver.getFirstName() : "") + 
+                                                       (driver.getLastName() != null ? " " + driver.getLastName() : "");
+                                    driverDetails = String.format("Driver: %s", driverName.trim());
+                                }
+                            } catch (Exception e) {
+                                log.warn("Could not fetch driver details for ID: {}", assignedDriverId);
+                                driverDetails = "Driver: Assigned";
+                            }
+                        }
+                        
+                        // Calculate pricing based on truck price
+                        if (selectedTruck.getTruckPrice() != null && selectedTruck.getTruckPrice() > 0) {
+                            estimatedAmount = selectedTruck.getTruckPrice();
+                            estimatedTotalAmount = selectedTruck.getTruckPrice(); // Base truck price without service fee
+                            
+                            log.info("Quote pricing - Amount: {}, Total Amount: {} based on truck price: {}", 
+                                estimatedAmount, estimatedTotalAmount, selectedTruck.getTruckPrice());
+                        } else {
+                            log.warn("Selected truck {} has no price set for quote", assignedTruckId);
+                            estimatedAmount = 0.0;
+                            estimatedTotalAmount = 0.0;
+                        }
+                        
+                        automationSuccess = true;
+                        message = "Quote generated successfully with automated truck and driver assignment";
+                        
+                        log.info("Quote auto-assigned truck: {} (capacity: {} kg, price: {}) and driver: {} for quote: {}", 
+                            assignedTruckId, selectedTruck.getCapacity(), selectedTruck.getTruckPrice(), assignedDriverId, quoteId);
+                    } else {
+                        log.warn("No available trucks found for quote - weight: {} kg and waste type: {}. Quote will be generated without assignment.", 
+                            quoteRequest.getTrashWeight(), quoteRequest.getWasteType());
+                        message = "Quote generated but no trucks available for automatic assignment";
+                    }
+                } catch (Exception e) {
+                    log.error("Error during automated truck assignment for quote: {}", e.getMessage(), e);
+                    message = "Quote generated but automation failed: " + e.getMessage();
+                }
+            } else {
+                log.info("Skipping automated truck assignment for quote - trashWeight not provided or invalid: {}", 
+                    quoteRequest.getTrashWeight());
+                message = "Quote generated but automated assignment skipped due to missing trash weight";
+            }
+
+            return QuoteResponseDTO.builder()
+                    .quoteId(quoteId)
+                    .estimatedAmount(estimatedAmount)
+                    .estimatedTotalAmount(estimatedTotalAmount)
+                    .assignedTruckId(assignedTruckId)
+                    .assignedDriverId(assignedDriverId)
+                    .truckDetails(truckDetails)
+                    .driverDetails(driverDetails)
+                    .truckCapacity(truckCapacity)
+                    .automationSuccess(automationSuccess)
+                    .wasteType(quoteRequest.getWasteType())
+                    .trashWeight(quoteRequest.getTrashWeight())
+                    .phoneNumber(quoteRequest.getPhoneNumber())
+                    .notes(quoteRequest.getNotes())
+                    .message(message)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error generating quote", e);
+            throw new RuntimeException("Failed to generate quote: " + e.getMessage());
+        }
+    }
+
+    /**
      * Process a new payment from the mobile app
      * @param paymentRequest Payment information from the mobile app
      * @return Payment confirmation response
@@ -208,17 +335,85 @@ public class PaymentService {
             if (paymentRequest.getBarangayId() != null) {
                 barangayId = paymentRequest.getBarangayId(); // allow override if provided
             }
+            if (paymentRequest.getPhoneNumber() != null) {
+                phoneNumber = paymentRequest.getPhoneNumber(); // allow override if provided
+            }
+            
+            // AUTOMATED TRUCK AND DRIVER ASSIGNMENT
+            String assignedTruckId = null;
+            String assignedDriverId = null;
+            Double calculatedAmount = paymentRequest.getAmount(); // Default to request amount
+            Double calculatedTotalAmount = paymentRequest.getTotalAmount(); // Default to request total
+            
+            // Only attempt auto-assignment if trashWeight is provided
+            if (paymentRequest.getTrashWeight() != null && paymentRequest.getTrashWeight() > 0) {
+                log.info("Attempting automated truck assignment for weight: {} kg, waste type: {}", 
+                    paymentRequest.getTrashWeight(), paymentRequest.getWasteType());
+                
+                try {
+                    // Find available trucks that can handle the weight
+                    List<Truck> availableTrucks = truckService.findAvailableTrucksByCapacity(
+                        paymentRequest.getTrashWeight(), 
+                        paymentRequest.getWasteType()
+                    );
+                    
+                    log.info("Found {} available trucks for assignment", availableTrucks.size());
+                    
+                    if (!availableTrucks.isEmpty()) {
+                        // Select the first truck (smallest sufficient capacity due to sorting)
+                        Truck selectedTruck = availableTrucks.get(0);
+                        assignedTruckId = selectedTruck.getTruckId();
+                        assignedDriverId = selectedTruck.getDriverId();
+                        
+                        // Calculate amount based on truck price
+                        if (selectedTruck.getTruckPrice() != null && selectedTruck.getTruckPrice() > 0) {
+                            calculatedAmount = selectedTruck.getTruckPrice();
+                            calculatedTotalAmount = selectedTruck.getTruckPrice(); // Use base truck price without service fee
+                            
+                            log.info("Using truck base price - Amount: {}, Total Amount: {} based on truck price: {}", 
+                                calculatedAmount, calculatedTotalAmount, selectedTruck.getTruckPrice());
+                        } else {
+                            log.warn("Selected truck {} has no price set, using request amounts", assignedTruckId);
+                        }
+                        
+                        // UPDATE TRUCK STATUS TO "CURRENTLY_IN_USE"
+                        try {
+                            selectedTruck.setStatus("CURRENTLY_IN_USE");
+                            selectedTruck.setUpdatedAt(new Date());
+                            firestore.collection("trucks").document(assignedTruckId).set(selectedTruck);
+                            log.info("Updated truck {} status to CURRENTLY_IN_USE", assignedTruckId);
+                        } catch (Exception truckUpdateEx) {
+                            log.error("Failed to update truck status for truck {}: {}", assignedTruckId, truckUpdateEx.getMessage());
+                            // Don't fail the payment creation if truck status update fails
+                        }
+                        
+                        log.info("Auto-assigned truck: {} (capacity: {} kg, price: {}) and driver: {} for payment: {}", 
+                            assignedTruckId, selectedTruck.getCapacity(), selectedTruck.getTruckPrice(), assignedDriverId, paymentId);
 
-            // Determine truck size based on number of sacks
-            String truckSize = null;
-            if (paymentRequest.getNumberOfSacks() != null) {
-                if (paymentRequest.getNumberOfSacks() <= 20) {
-                    truckSize = "Small";
-                } else if (paymentRequest.getNumberOfSacks() <= 50) {
-                    truckSize = "Medium";
-                } else {
-                    truckSize = "Large";
+                    } else {
+                        log.warn("No available trucks found for weight: {} kg and waste type: {}. Payment will be created without assignment.", 
+                            paymentRequest.getTrashWeight(), paymentRequest.getWasteType());
+                        
+                        // Debug: Try to find ALL trucks to see what's available
+                        try {
+                            List<TruckResponseDTO> allTrucks = truckService.getAllTrucks();
+                            log.info("Total trucks in system: {}", allTrucks.size());
+                            for (TruckResponseDTO truck : allTrucks) {
+                                log.debug("Truck {}: capacity={}, status={}, driverId={}, wasteType={}, price={}", 
+                                    truck.getTruckId(), truck.getCapacity(), truck.getStatus(), 
+                                    truck.getDriverId(), truck.getWasteType(), truck.getTruckPrice());
+                            }
+                        } catch (Exception debugEx) {
+                            log.warn("Could not fetch all trucks for debugging: {}", debugEx.getMessage());
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Error during automated truck assignment: {}", e.getMessage(), e);
+                    // Continue with payment creation even if auto-assignment fails
                 }
+            } else {
+                log.info("Skipping automated truck assignment - trashWeight not provided or invalid: {}", 
+                    paymentRequest.getTrashWeight());
             }
 
             Payment payment = Payment.builder()
@@ -229,9 +424,8 @@ public class PaymentService {
                     .address(paymentRequest.getAddress())
                     .latitude(paymentRequest.getLatitude())
                     .longitude(paymentRequest.getLongitude())
-                    .amount(paymentRequest.getAmount())
-                    .tax(paymentRequest.getTax())
-                    .totalAmount(paymentRequest.getTotalAmount())
+                    .amount(calculatedAmount) // Use calculated amount based on truck price
+                    .totalAmount(calculatedTotalAmount) // Use calculated total amount
                     .paymentMethod(paymentRequest.getPaymentMethod())
                     .paymentReference(paymentRequest.getPaymentReference())
                     .notes(paymentRequest.getNotes())
@@ -241,13 +435,35 @@ public class PaymentService {
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
                     .wasteType(paymentRequest.getWasteType())
-                    .jobOrderStatus("Available")
-                    .numberOfSacks(paymentRequest.getNumberOfSacks())
-                    .truckSize(truckSize)
+                    .trashWeight(paymentRequest.getTrashWeight())
+                    .truckId(assignedTruckId != null ? assignedTruckId : paymentRequest.getTruckId())
+                    .driverId(assignedDriverId)
+                    .jobOrderStatus(assignedTruckId != null ? "Available" : "Available")
                     .build();
 
             // Save the payment to Firestore
             firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            
+            // Send notification to assigned driver if auto-assignment was successful
+            if (assignedDriverId != null) {
+                try {
+                    Map<String, String> notificationData = new HashMap<>();
+                    notificationData.put("paymentId", paymentId);
+                    notificationData.put("type", "NEW_JOB_ASSIGNMENT");
+                    
+                    notificationService.sendNotificationToUser(
+                        assignedDriverId,
+                        "New Job Assignment",
+                        "You have been automatically assigned to a new pickup order at " + payment.getAddress(),
+                        notificationData
+                    );
+                    
+                    log.info("Notification sent to assigned driver: {}", assignedDriverId);
+                } catch (Exception e) {
+                    log.error("Failed to send notification to driver: {}", e.getMessage(), e);
+                    // Don't fail the payment creation if notification fails
+                }
+            }
 
             // Return the response
             return PaymentResponseDTO.builder()
@@ -260,16 +476,21 @@ public class PaymentService {
                     .latitude(payment.getLatitude())
                     .longitude(payment.getLongitude())
                     .amount(payment.getAmount())
+                    .totalAmount(payment.getTotalAmount())
                     .paymentMethod(payment.getPaymentMethod())
                     .paymentReference(payment.getPaymentReference())
+                    .notes(payment.getNotes())
                     .createdAt(payment.getCreatedAt())
                     .barangayId(barangayId)
                     .phoneNumber(phoneNumber)
                     .wasteType(payment.getWasteType())
+                    .trashWeight(payment.getTrashWeight())
+                    .truckId(payment.getTruckId())
+                    .driverId(payment.getDriverId())
                     .jobOrderStatus(payment.getJobOrderStatus())
-                    .numberOfSacks(payment.getNumberOfSacks())
-                    .truckSize(payment.getTruckSize())
-                    .message("Payment processed successfully")
+                    .message(assignedTruckId != null ? 
+                        String.format("Payment processed successfully with automated truck and driver assignment. Amount set to truck base price: %.2f", calculatedAmount) : 
+                        "Payment processed successfully")
                     .build();
 
         } catch (Exception e) {
@@ -415,8 +636,8 @@ public class PaymentService {
                 .paymentMethod(payment.getPaymentMethod())
                 .paymentReference(payment.getPaymentReference())
                 .amount(payment.getAmount())
-                .tax(payment.getTax() != null ? payment.getTax() : 0.0)
                 .totalAmount(payment.getTotalAmount() != null ? payment.getTotalAmount() : payment.getAmount())
+                .notes(payment.getNotes())
                 .createdAt(payment.getCreatedAt())
                 .barangayId(payment.getBarangayId())
                 .customerName(payment.getCustomerName())
@@ -427,10 +648,13 @@ public class PaymentService {
                 .phoneNumber(payment.getPhoneNumber())
                 .driverId(payment.getDriverId())
                 .wasteType(payment.getWasteType())
+                .trashWeight(payment.getTrashWeight())
                 .truckId(payment.getTruckId())
                 .jobOrderStatus(payment.getJobOrderStatus())
-                .numberOfSacks(payment.getNumberOfSacks())
-                .truckSize(payment.getTruckSize())
+                .isDelivered(payment.getIsDelivered())
+                .customerConfirmation(payment.getCustomerConfirmation())
+                .driverConfirmation(payment.getDriverConfirmation())
+                .serviceRating(payment.getServiceRating())
                 .message("Payment retrieved successfully")
                 .build();
     }
@@ -447,6 +671,8 @@ public class PaymentService {
         }
         return responseDTOs;
     }
+    
+
 
     public List<Map<String, Object>> getTopBarangaysByPickupFrequency(int topN) {
         try {
@@ -650,7 +876,7 @@ public class PaymentService {
     /**
      * Update job order status by a driver
      * @param paymentId Payment ID
-     * @param jobOrderStatus New job order status (e.g., "COMPLETED")
+     * @param jobOrderStatus New job order status (e.g., "Completed")
      * @return Updated payment response
      */
     public PaymentResponseDTO updateJobOrderStatus(String paymentId, String jobOrderStatus) {
@@ -689,10 +915,10 @@ public class PaymentService {
             payment.setJobOrderStatus(normalizedStatus);
             payment.setUpdatedAt(new Date());
             
-            // If job is marked as COMPLETED, release the truck (set to available)
-            if ("COMPLETED".equalsIgnoreCase(normalizedStatus) && payment.getTruckId() != null) {
+            // If job is marked as Completed, release the truck (set to available)
+            if ("Completed".equalsIgnoreCase(normalizedStatus) && payment.getTruckId() != null) {
                 String truckId = payment.getTruckId();
-                log.debug("Job marked as COMPLETED, releasing truck: {}", truckId);
+                log.debug("Job marked as Completed, releasing truck: {}", truckId);
                 
                 Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
                 
@@ -716,7 +942,7 @@ public class PaymentService {
             log.debug("Checking if notification should be sent. New status: {}, Previous status: {}, Equal: {}", 
                 normalizedStatus, previousStatus, normalizedStatus.equalsIgnoreCase(previousStatus));
                 
-            if ("ACCEPTED".equalsIgnoreCase(normalizedStatus) && !normalizedStatus.equalsIgnoreCase(previousStatus)) {
+            if ("Accepted".equalsIgnoreCase(normalizedStatus) && !normalizedStatus.equalsIgnoreCase(previousStatus)) {
                 log.info("Status changed to Accepted, sending notification to customer");
                 
                 if (payment.getCustomerEmail() != null) {
@@ -766,35 +992,510 @@ public class PaymentService {
     /**
      * Helper method to normalize job order status for consistent comparison
      * @param status The status to normalize
-     * @return Normalized status in uppercase
+     * @return Normalized status in proper case format
      */
     private String normalizeStatus(String status) {
         if (status == null) {
             return null;
         }
         
-        // Convert to uppercase for consistent comparison
-        String normalized = status.toUpperCase();
+        // Don't convert to uppercase anymore
+        String normalized = status;
         
         // Handle variations in formatting
-        normalized = normalized.replace("-", "_");
-        normalized = normalized.replace(" ", "_");
+        normalized = normalized.replace("-", "-");
+        normalized = normalized.replace(" ", "-");
         
         // Make sure we're using consistent statuses
         switch (normalized) {
-            case "NEW":
-            case "ACCEPTED":
-            case "IN_PROGRESS":
-            case "COMPLETED":
-            case "CANCELLED":
+            case "New":
+            case "Accepted":
+            case "In-Progress":
+            case "Completed":
+            case "Cancelled":
                 return normalized;
-            case "AVAILABLE":
-                return "NEW"; // Map "Available" to "NEW"
-            case "INPROGRESS":
-                return "IN_PROGRESS"; // Fix missing underscore
+            case "Available":
+                return "New"; // Map "Available" to "New"
+            case "InProgress":
+                return "In-Progress"; // Fix missing hyphen
             default:
                 log.warn("Unknown job order status: {}, using as-is: {}", status, normalized);
                 return normalized;
+        }
+    }
+
+    /**
+     * Update the delivery status of a payment
+     * @param paymentId Payment ID
+     * @param isDelivered New delivery status
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO updateDeliveryStatus(String paymentId, Boolean isDelivered) {
+        try {
+            log.info("Updating delivery status for payment ID: {} to: {}", paymentId, isDelivered);
+            
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                log.error("Payment not found with ID: {}", paymentId);
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Update the delivery status
+            payment.setIsDelivered(isDelivered);
+            payment.setUpdatedAt(new Date());
+            
+            // If delivery is marked as true, release the truck (set status back to AVAILABLE)
+            if (Boolean.TRUE.equals(isDelivered) && payment.getTruckId() != null) {
+                String truckId = payment.getTruckId();
+                log.info("Delivery completed, releasing truck: {}", truckId);
+                
+                try {
+                    Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
+                    
+                    if (truck != null) {
+                        // Update truck status back to AVAILABLE
+                        truck.setStatus("AVAILABLE");
+                        truck.setUpdatedAt(new Date());
+                        firestore.collection("trucks").document(truckId).set(truck);
+                        log.info("Successfully updated truck {} status back to AVAILABLE", truckId);
+                    } else {
+                        log.warn("Truck with ID {} not found when trying to release it", truckId);
+                    }
+                } catch (Exception truckUpdateEx) {
+                    log.error("Failed to update truck status for truck {}: {}", truckId, truckUpdateEx.getMessage());
+                    // Don't fail the delivery status update if truck status update fails
+                }
+            }
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            log.info("Successfully updated delivery status to: {} for payment ID: {}", isDelivered, paymentId);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error updating delivery status for payment ID: {}", paymentId, e);
+            throw new RuntimeException("Failed to update delivery status: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Update job order status by a customer
+     * This method includes authorization checks to ensure only the customer who owns the payment can update it
+     * @param paymentId Payment ID
+     * @param jobOrderStatus New job order status
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO updateJobOrderStatusByCustomer(String paymentId, String jobOrderStatus) {
+        try {
+            log.info("Customer updating job order status for payment ID: {} to status: {}", paymentId, jobOrderStatus);
+            
+            // Get the current user from security context
+            String currentUserEmail = getCurrentUserEmail();
+            if (currentUserEmail == null) {
+                throw new RuntimeException("Unable to determine current user");
+            }
+            
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                log.error("Payment not found with ID: {}", paymentId);
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Authorization check: ensure the current user is the customer who owns this payment
+            if (!currentUserEmail.equals(payment.getCustomerEmail())) {
+                log.error("Unauthorized attempt to update payment. Current user: {}, Payment owner: {}", 
+                    currentUserEmail, payment.getCustomerEmail());
+                throw new RuntimeException("You are not authorized to update this payment");
+            }
+            
+            log.debug("Authorization passed. Customer {} updating their payment {}", currentUserEmail, paymentId);
+            
+            // Validate job order status
+            if (jobOrderStatus == null || jobOrderStatus.isEmpty()) {
+                log.error("Job order status cannot be empty for payment ID: {}", paymentId);
+                throw new RuntimeException("Job order status cannot be empty");
+            }
+            
+            // Store previous status for comparison
+            String previousStatus = payment.getJobOrderStatus();
+            log.debug("Previous job order status: {}", previousStatus);
+            
+            // Normalize the job order status to ensure consistent casing
+            String normalizedStatus = normalizeStatus(jobOrderStatus);
+            log.debug("Normalized new status: {}", normalizedStatus);
+            
+            // Update job order status
+            payment.setJobOrderStatus(normalizedStatus);
+            payment.setUpdatedAt(new Date());
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            log.info("Successfully updated job order status to: {} for payment ID: {} by customer: {}", 
+                normalizedStatus, paymentId, currentUserEmail);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error updating job order status for payment ID: {} by customer", paymentId, e);
+            throw new RuntimeException("Failed to update job order status: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Update job order status by customer or driver based on user role
+     * Uses role-based authorization to determine access permissions
+     * @param paymentId Payment ID
+     * @param jobOrderStatus New job order status
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO updateJobOrderStatusByRole(String paymentId, String jobOrderStatus) {
+        try {
+            log.info("User updating job order status for payment ID: {} to status: {}", paymentId, jobOrderStatus);
+            
+            // Get the current user from security context
+            String currentUserEmail = getCurrentUserEmail();
+            String currentUserRole = getCurrentUserRole();
+            
+            if (currentUserEmail == null || currentUserRole == null) {
+                throw new RuntimeException("Unable to determine current user or role");
+            }
+            
+            log.debug("Current user: {}, role: {}", currentUserEmail, currentUserRole);
+            
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                log.error("Payment not found with ID: {}", paymentId);
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Validate job order status
+            if (jobOrderStatus == null || jobOrderStatus.isEmpty()) {
+                log.error("Job order status cannot be empty for payment ID: {}", paymentId);
+                throw new RuntimeException("Job order status cannot be empty");
+            }
+            
+            // Role-based authorization checks using if-else
+            if ("CUSTOMER".equalsIgnoreCase(currentUserRole)) {
+                // Authorization check: ensure the current user is the customer who owns this payment
+                if (!currentUserEmail.equals(payment.getCustomerEmail())) {
+                    log.error("Unauthorized attempt to update payment. Current user: {}, Payment owner: {}", 
+                        currentUserEmail, payment.getCustomerEmail());
+                    throw new RuntimeException("You are not authorized to update this payment");
+                }
+                log.debug("Customer authorization passed for payment: {}", paymentId);
+                
+            } else if ("DRIVER".equalsIgnoreCase(currentUserRole)) {
+                // Authorization check: ensure the current user is the driver assigned to this payment
+                if (payment.getDriverId() == null || !currentUserEmail.equals(getDriverEmailById(payment.getDriverId()))) {
+                    log.error("Unauthorized attempt to update payment. Current user: {}, Assigned driver: {}", 
+                        currentUserEmail, payment.getDriverId());
+                    throw new RuntimeException("You are not authorized to update this payment");
+                }
+                log.debug("Driver authorization passed for payment: {}", paymentId);
+                
+            } else {
+                throw new RuntimeException("Invalid user role for updating job order status: " + currentUserRole);
+            }
+            
+            // Store previous status for comparison
+            String previousStatus = payment.getJobOrderStatus();
+            log.debug("Previous job order status: {}", previousStatus);
+            
+            // Normalize the job order status to ensure consistent casing
+            String normalizedStatus = normalizeStatus(jobOrderStatus);
+            log.debug("Normalized new status: {}", normalizedStatus);
+            
+            // Update job order status
+            payment.setJobOrderStatus(normalizedStatus);
+            payment.setUpdatedAt(new Date());
+            
+            // If job is marked as Completed, release the truck (set to available)
+            if ("Completed".equalsIgnoreCase(normalizedStatus) && payment.getTruckId() != null) {
+                String truckId = payment.getTruckId();
+                log.debug("Job marked as Completed, releasing truck: {}", truckId);
+                
+                Truck truck = firestore.collection("trucks").document(truckId).get().get().toObject(Truck.class);
+                
+                if (truck != null) {
+                    // Update truck status to AVAILABLE
+                    truck.setStatus("AVAILABLE");
+                    truck.setUpdatedAt(new Date());
+                    firestore.collection("trucks").document(truckId).set(truck);
+                    log.debug("Updated truck status to AVAILABLE");
+                }
+                
+                // Also update payment status
+                payment.setStatus("COMPLETED");
+            }
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            log.info("Successfully updated job order status to: {} for payment ID: {} by {} ({})", 
+                normalizedStatus, paymentId, currentUserEmail, currentUserRole);
+            
+            // Send notification to the customer if the status changed to Accepted by driver
+            log.debug("Checking if notification should be sent. New status: {}, Previous status: {}, Role: {}", 
+                normalizedStatus, previousStatus, currentUserRole);
+                
+            if ("Accepted".equalsIgnoreCase(normalizedStatus) && 
+                !normalizedStatus.equalsIgnoreCase(previousStatus) && 
+                "DRIVER".equalsIgnoreCase(currentUserRole)) {
+                log.info("Status changed to Accepted by driver, sending notification to customer");
+                
+                if (payment.getCustomerEmail() != null) {
+                    log.debug("Looking up customer by email: {}", payment.getCustomerEmail());
+                    User customer = userService.getUserByEmailOrUsername(payment.getCustomerEmail());
+                    
+                    if (customer != null) {
+                        log.debug("Found customer: {}, userId: {}", customer.getEmail(), customer.getUserId());
+                        
+                        // Check if customer has a valid FCM token
+                        boolean hasValidToken = notificationService.hasValidFcmToken(customer.getUserId());
+                        if (!hasValidToken) {
+                            log.warn("Customer does not have a valid FCM token, notification will not be sent");
+                            return mapToResponseDTO(payment);
+                        }
+                        
+                        Map<String, String> data = new HashMap<>();
+                        data.put("paymentId", paymentId);
+                        data.put("type", "JOB_ORDER_ACCEPTED");
+                        
+                        boolean notificationSent = notificationService.sendNotificationToUser(
+                            customer.getUserId(),
+                            "Job Order Accepted",
+                            "Your job order has been accepted by the driver",
+                            data
+                        );
+                        
+                        log.info("Notification sent to customer: {}", notificationSent ? "success" : "failed");
+                    } else {
+                        log.warn("Customer not found for email: {}", payment.getCustomerEmail());
+                    }
+                } else {
+                    log.warn("No customer email associated with payment: {}", paymentId);
+                }
+            } else {
+                log.debug("No notification needed. Status: {}, Previous: {}, Role: {}", 
+                    normalizedStatus, previousStatus, currentUserRole);
+            }
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error updating job order status for payment ID: {} by role", paymentId, e);
+            throw new RuntimeException("Failed to update job order status: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get the current user's email from the security context
+     * @return Current user's email or null if not found
+     */
+    private String getCurrentUserEmail() {
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            if (principal instanceof UserDetails) {
+                return ((UserDetails) principal).getUsername();
+            } else if (principal instanceof String) {
+                return (String) principal;
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Error getting current user from security context", e);
+            return null;
+        }
+    }
+    
+    /**
+     * Get the current user's role from the security context
+     * @return Current user's role or null if not found
+     */
+    private String getCurrentUserRole() {
+        try {
+            return SecurityContextHolder.getContext().getAuthentication().getAuthorities()
+                .stream()
+                .findFirst()
+                .map(authority -> authority.getAuthority().replace("ROLE_", ""))
+                .orElse(null);
+        } catch (Exception e) {
+            log.error("Error getting current user role from security context", e);
+            return null;
+        }
+    }
+
+    /**
+     * Upload confirmation image for job status
+     * Allows both customers and drivers to upload confirmation images
+     * @param paymentId Payment ID
+     * @param imageUrl Image URL or base64 data
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO uploadConfirmationImage(String paymentId, String imageUrl) {
+        try {
+            log.info("Uploading confirmation image for payment ID: {}", paymentId);
+            
+            // Get the current user from security context
+            String currentUserEmail = getCurrentUserEmail();
+            String currentUserRole = getCurrentUserRole();
+            
+            if (currentUserEmail == null || currentUserRole == null) {
+                throw new RuntimeException("Unable to determine current user or role");
+            }
+            
+            log.debug("Current user: {}, role: {}", currentUserEmail, currentUserRole);
+            
+            // Get the payment
+            Payment payment = firestore.collection(COLLECTION_NAME).document(paymentId).get().get().toObject(Payment.class);
+            if (payment == null) {
+                log.error("Payment not found with ID: {}", paymentId);
+                throw new RuntimeException("Payment not found with ID: " + paymentId);
+            }
+            
+            // Validate image URL
+            if (imageUrl == null || imageUrl.trim().isEmpty()) {
+                throw new RuntimeException("Image URL cannot be empty");
+            }
+            
+            // Role-based logic for storing the image
+            if ("CUSTOMER".equalsIgnoreCase(currentUserRole)) {
+                // Authorization check: ensure the current user is the customer who owns this payment
+                if (!currentUserEmail.equals(payment.getCustomerEmail())) {
+                    log.error("Unauthorized attempt to upload confirmation image. Current user: {}, Payment owner: {}", 
+                        currentUserEmail, payment.getCustomerEmail());
+                    throw new RuntimeException("You are not authorized to upload confirmation for this payment");
+                }
+                
+                // Store in customerConfirmation field
+                payment.setCustomerConfirmation(imageUrl);
+                log.debug("Customer confirmation image uploaded for payment: {}", paymentId);
+                
+            } else if ("DRIVER".equalsIgnoreCase(currentUserRole)) {
+                // Authorization check: ensure the current user is the driver assigned to this payment
+                if (payment.getDriverId() == null || !currentUserEmail.equals(getDriverEmailById(payment.getDriverId()))) {
+                    log.error("Unauthorized attempt to upload confirmation image. Current user: {}, Assigned driver: {}", 
+                        currentUserEmail, payment.getDriverId());
+                    throw new RuntimeException("You are not authorized to upload confirmation for this payment");
+                }
+                
+                // Store in driverConfirmation field
+                payment.setDriverConfirmation(imageUrl);
+                log.debug("Driver confirmation image uploaded for payment: {}", paymentId);
+                
+            } else {
+                throw new RuntimeException("Invalid user role for uploading confirmation image: " + currentUserRole);
+            }
+            
+            // Update timestamp
+            payment.setUpdatedAt(new Date());
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(paymentId).set(payment);
+            log.info("Successfully uploaded confirmation image for payment ID: {} by {} ({})", 
+                paymentId, currentUserEmail, currentUserRole);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error uploading confirmation image for payment ID: {}", paymentId, e);
+            throw new RuntimeException("Failed to upload confirmation image: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Update service rating for a payment by customer
+     * Only the customer who owns the payment can update the rating
+     * @param orderId Order ID to identify the payment
+     * @param serviceRating Service rating (1-5 stars)
+     * @return Updated payment response
+     */
+    public PaymentResponseDTO updateServiceRating(String orderId, Integer serviceRating) {
+        try {
+            log.info("Updating service rating for order ID: {} to rating: {}", orderId, serviceRating);
+            
+            // Get the current user from security context
+            String currentUserEmail = getCurrentUserEmail();
+            if (currentUserEmail == null) {
+                throw new RuntimeException("Unable to determine current user");
+            }
+            
+            // Get the payment by order ID
+            Payment payment = getPaymentByOrderIdInternal(orderId);
+            if (payment == null) {
+                log.error("Payment not found with order ID: {}", orderId);
+                throw new RuntimeException("Payment not found with order ID: " + orderId);
+            }
+            
+            // Authorization check: ensure the current user is the customer who owns this payment
+            if (!currentUserEmail.equals(payment.getCustomerEmail())) {
+                log.error("Unauthorized attempt to update service rating. Current user: {}, Payment owner: {}", 
+                    currentUserEmail, payment.getCustomerEmail());
+                throw new RuntimeException("You are not authorized to rate this order");
+            }
+            
+            log.debug("Authorization passed. Customer {} updating rating for their order {}", currentUserEmail, orderId);
+            
+            // Validate service rating
+            if (serviceRating == null || serviceRating < 1 || serviceRating > 5) {
+                log.error("Invalid service rating: {}. Must be between 1 and 5", serviceRating);
+                throw new RuntimeException("Service rating must be between 1 and 5 stars");
+            }
+            
+            // Update the service rating
+            payment.setServiceRating(serviceRating);
+            payment.setUpdatedAt(new Date());
+            
+            // Save the updated payment
+            firestore.collection(COLLECTION_NAME).document(payment.getId()).set(payment);
+            log.info("Successfully updated service rating to: {} for order ID: {}", serviceRating, orderId);
+            
+            return mapToResponseDTO(payment);
+            
+        } catch (Exception e) {
+            log.error("Error updating service rating for order ID: {}", orderId, e);
+            throw new RuntimeException("Failed to update service rating: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Helper method to get payment by order ID without DTO mapping
+     * @param orderId Order ID
+     * @return Payment entity
+     */
+    private Payment getPaymentByOrderIdInternal(String orderId) {
+        try {
+            CollectionReference paymentsCollection = firestore.collection(COLLECTION_NAME);
+            Query query = paymentsCollection.whereEqualTo("orderId", orderId);
+            ApiFuture<QuerySnapshot> future = query.get();
+            List<Payment> payments = future.get().toObjects(Payment.class);
+            
+            if (payments.isEmpty()) {
+                return null;
+            }
+            
+            return payments.get(0);
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Error getting payment by order ID: {}", orderId, e);
+            return null;
+        }
+    }
+    
+    /**
+     * Helper method to get driver email by driver ID
+     * @param driverId Driver ID
+     * @return Driver email or null if not found
+     */
+    private String getDriverEmailById(String driverId) {
+        try {
+            User driver = userService.getUserById(driverId);
+            return driver != null ? driver.getEmail() : null;
+        } catch (Exception e) {
+            log.error("Error getting driver email for ID: {}", driverId, e);
+            return null;
         }
     }
 }

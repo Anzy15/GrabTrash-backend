@@ -3,6 +3,7 @@ package com.capstone.GrabTrash.controller;
 import com.capstone.GrabTrash.dto.TruckRequestDTO;
 import com.capstone.GrabTrash.dto.TruckResponseDTO;
 import com.capstone.GrabTrash.dto.TruckAssignmentDTO;
+import com.capstone.GrabTrash.dto.DriverTruckAssignmentDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
 import com.capstone.GrabTrash.service.TruckService;
 import com.capstone.GrabTrash.service.PaymentService;
@@ -12,14 +13,14 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * REST Controller for handling truck-related endpoints
- * All endpoints require JWT authentication with admin role
  */
 @RestController
 @RequestMapping("/api/trucks")
-@PreAuthorize("hasRole('ADMIN')")
 public class TruckController {
 
     private final TruckService truckService;
@@ -46,11 +47,11 @@ public class TruckController {
 
     /**
      * Get all trucks
-     * Requires JWT authentication with admin role
+     * Accessible to all authenticated users
      * @return List of all trucks
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<TruckResponseDTO>> getAllTrucks() {
         List<TruckResponseDTO> trucks = truckService.getAllTrucks();
         return ResponseEntity.ok(trucks);
@@ -81,6 +82,41 @@ public class TruckController {
     public ResponseEntity<TruckResponseDTO> updateTruck(@PathVariable String truckId, @RequestBody TruckRequestDTO truckRequest) {
         TruckResponseDTO response = truckService.updateTruck(truckId, truckRequest);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Update truck price
+     * Requires JWT authentication with admin role
+     * @param truckId Truck ID
+     * @param truckRequest Updated truck information with price
+     * @return Updated truck response
+     */
+    @PutMapping("/{truckId}/price")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TruckResponseDTO> updateTruckPrice(@PathVariable String truckId, @RequestBody TruckRequestDTO truckRequest) {
+        try {
+            // Get the existing truck first
+            TruckResponseDTO existingTruck = truckService.getTruckById(truckId);
+            
+            // Create a new request with only the price updated
+            TruckRequestDTO priceUpdateRequest = TruckRequestDTO.builder()
+                .size(existingTruck.getSize())
+                .wasteType(existingTruck.getWasteType())
+                .status(existingTruck.getStatus())
+                .make(existingTruck.getMake())
+                .model(existingTruck.getModel())
+                .plateNumber(existingTruck.getPlateNumber())
+                .capacity(existingTruck.getCapacity())
+                .driverId(existingTruck.getDriverId())
+                .truckPrice(truckRequest.getTruckPrice())
+                .build();
+            
+            // Update with all fields preserved
+            TruckResponseDTO response = truckService.updateTruck(truckId, priceUpdateRequest);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     /**
@@ -146,5 +182,96 @@ public class TruckController {
     public ResponseEntity<PaymentResponseDTO> releaseTruckFromPayment(@PathVariable String paymentId) {
         PaymentResponseDTO response = paymentService.releaseTruckFromPayment(paymentId);
         return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Assign a driver to a truck
+     * Requires JWT authentication with admin role
+     * @param assignment Driver-truck assignment information
+     * @return Updated truck response
+     */
+    @PostMapping("/assign-driver")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TruckResponseDTO> assignDriverToTruck(@RequestBody DriverTruckAssignmentDTO assignment) {
+        TruckResponseDTO response = truckService.assignDriverToTruck(assignment.getTruckId(), assignment.getDriverId());
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Remove driver assignment from a truck
+     * Requires JWT authentication with admin role
+     * @param truckId ID of the truck to remove driver from
+     * @return Updated truck response
+     */
+    @DeleteMapping("/remove-driver/{truckId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TruckResponseDTO> removeDriverFromTruck(@PathVariable String truckId) {
+        TruckResponseDTO response = truckService.removeDriverFromTruck(truckId);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Get trucks assigned to a specific driver
+     * Requires JWT authentication with admin role
+     * @param driverId Driver ID
+     * @return List of trucks assigned to the driver
+     */
+    @GetMapping("/driver/{driverId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<TruckResponseDTO>> getTrucksByDriverId(@PathVariable String driverId) {
+        List<TruckResponseDTO> trucks = truckService.getTrucksByDriverId(driverId);
+        return ResponseEntity.ok(trucks);
+    }
+    
+    /**
+     * Get trucks with no assigned driver
+     * Requires JWT authentication with admin role
+     * @return List of unassigned trucks
+     */
+    @GetMapping("/unassigned")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<TruckResponseDTO>> getUnassignedTrucks() {
+        List<TruckResponseDTO> trucks = truckService.getUnassignedTrucks();
+        return ResponseEntity.ok(trucks);
+    }
+    
+    /**
+     * Debug endpoint: Find available trucks for specific weight and waste type
+     * Requires JWT authentication with admin role
+     * @param weight Required capacity in kg
+     * @param wasteType Waste type (optional)
+     * @return List of suitable trucks with debug information
+     */
+    @GetMapping("/debug/available")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> debugAvailableTrucks(
+            @RequestParam double weight,
+            @RequestParam(required = false) String wasteType) {
+        
+        Map<String, Object> debugInfo = new HashMap<>();
+        
+        try {
+            // Get all trucks for debugging
+            List<TruckResponseDTO> allTrucks = truckService.getAllTrucks();
+            debugInfo.put("totalTrucks", allTrucks.size());
+            debugInfo.put("allTrucks", allTrucks);
+            
+            // Find suitable trucks using the same logic as payment processing
+            List<com.capstone.GrabTrash.model.Truck> suitableTrucks = 
+                truckService.findAvailableTrucksByCapacity(weight, wasteType);
+            
+            debugInfo.put("requiredWeight", weight);
+            debugInfo.put("wasteType", wasteType);
+            debugInfo.put("suitableTrucksCount", suitableTrucks.size());
+            debugInfo.put("suitableTrucks", suitableTrucks);
+            
+            return ResponseEntity.ok(debugInfo);
+            
+        } catch (Exception e) {
+            debugInfo.put("error", e.getMessage());
+            debugInfo.put("requiredWeight", weight);
+            debugInfo.put("wasteType", wasteType);
+            return ResponseEntity.ok(debugInfo);
+        }
     }
 } 

@@ -22,6 +22,7 @@ public class User {
     private String barangayId;
     private String barangayName;
     private String fcmToken;
+    private String profileImage;  // URL or base64 encoded profile image
 
     // Default constructor
     public User() {
@@ -177,6 +178,16 @@ public class User {
     @PropertyName("fcmToken")
     public void setFcmToken(String fcmToken) {
         this.fcmToken = fcmToken;
+    }
+
+    @PropertyName("profileImage")
+    public String getProfileImage() {
+        return profileImage;
+    }
+
+    @PropertyName("profileImage")
+    public void setProfileImage(String profileImage) {
+        this.profileImage = profileImage;
     }
 
     @Override

@@ -31,11 +31,14 @@ public class PaymentResponseDTO {
     private String customerEmail;
     private String driverId;
     private double amount;
-    private double tax;
     private double totalAmount;
+    private String notes;          // Customer notes or special instructions
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
+    private Double trashWeight; // Weight of trash in kilograms
     private String truckId;    // ID of the assigned truck
     private String jobOrderStatus;  // Status of the job order (NEW, IN_PROGRESS, COMPLETED, CANCELLED)
-    private Integer numberOfSacks; // Number of sacks for waste collection
-    private String truckSize;  // Size of the truck (Small, Medium, Large)
+    private Boolean isDelivered;  // Whether the waste has been delivered to the disposal facility
+    private String customerConfirmation;  // Customer confirmation proof image URL
+    private String driverConfirmation;  // Driver confirmation proof image URL
+    private Integer serviceRating;  // Customer service rating (1-5 stars)
 }

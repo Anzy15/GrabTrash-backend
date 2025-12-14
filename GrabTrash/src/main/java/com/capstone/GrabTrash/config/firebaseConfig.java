@@ -10,6 +10,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -22,10 +23,18 @@ public class firebaseConfig {
     public Firestore firestore() throws IOException {
         if (firestoreInstance == null) {
             if (FirebaseApp.getApps().isEmpty()) {
-                InputStream serviceAccount = getClass().getClassLoader().getResourceAsStream("serviceAccountKey.json");
-
-                if (serviceAccount == null) {
-                    throw new IOException("Service Account Key file not found in resources!");
+                InputStream serviceAccount;
+                
+                // Try to get service account from environment variable first
+                String serviceAccountJson = System.getenv("FIREBASE_SERVICE_ACCOUNT_JSON");
+                if (serviceAccountJson != null && !serviceAccountJson.isEmpty()) {
+                    serviceAccount = new ByteArrayInputStream(serviceAccountJson.getBytes());
+                } else {
+                    // Fallback to file in resources (for local development)
+                    serviceAccount = getClass().getClassLoader().getResourceAsStream("serviceAccountKey.json");
+                    if (serviceAccount == null) {
+                        throw new IOException("Service Account Key not found! Set FIREBASE_SERVICE_ACCOUNT_JSON environment variable or place serviceAccountKey.json in resources!");
+                    }
                 }
 
                 FirebaseOptions options = FirebaseOptions.builder()

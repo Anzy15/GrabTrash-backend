@@ -11,6 +11,7 @@ import com.capstone.GrabTrash.dto.ForgotPasswordRequest;
 import com.capstone.GrabTrash.dto.SecurityQuestionRequest;
 import com.capstone.GrabTrash.dto.RegisterRequest;
 import com.capstone.GrabTrash.dto.LocationUpdateRequest;
+import com.capstone.GrabTrash.dto.ProfileImageUpdateDTO;
 import com.capstone.GrabTrash.service.UserService;
 
 import java.util.HashMap;
@@ -139,5 +140,16 @@ public class UserController {
     @GetMapping("/locations/private-entities")
     public ResponseEntity<?> getAllPrivateEntityLocations() {
         return userService.getAllPrivateEntityLocations();
+    }
+
+    /**
+     * Upload profile image for any user
+     * Accessible by all user roles - users can only update their own profile image
+     * @param imageRequest Profile image update request
+     * @return Updated user profile response
+     */
+    @PutMapping("/profile/image")
+    public ResponseEntity<?> uploadProfileImage(@RequestBody ProfileImageUpdateDTO imageRequest) {
+        return userService.uploadProfileImage(imageRequest.getImageUrl());
     }
 }

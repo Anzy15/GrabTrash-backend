@@ -24,7 +24,6 @@ public class Payment {
     private Double latitude;
     private Double longitude;
     private Double amount;
-    private Double tax;
     private Double totalAmount;
     private String paymentMethod;
     private String paymentReference;
@@ -38,8 +37,11 @@ public class Payment {
     private String wasteType;  // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
     private String truckId;   // ID of the assigned truck
     private String jobOrderStatus;  // Status of the job order (NEW, IN_PROGRESS, COMPLETED, CANCELLED)
-    private Integer numberOfSacks; // Number of sacks for waste collection
-    private String truckSize;  // Size of the truck (Small, Medium, Large)
+    private Double trashWeight; // Weight of trash in kilograms
+    private Boolean isDelivered;  // Whether the waste has been delivered to the disposal facility
+    private String customerConfirmation;  // Customer confirmation proof image URL
+    private String driverConfirmation;  // Driver confirmation proof image URL
+    private Integer serviceRating;  // Customer service rating (1-5 stars)
     
     // Pre-persist hook to set dates
     public void prePersist() {
@@ -47,6 +49,11 @@ public class Payment {
             createdAt = new Date();
         }
         updatedAt = new Date();
+        
+        // Set default value for isDelivered if null
+        if (isDelivered == null) {
+            isDelivered = false;
+        }
     }
 
     @PropertyName("driverId")
@@ -89,34 +96,53 @@ public class Payment {
         this.jobOrderStatus = jobOrderStatus;
     }
     
-    @PropertyName("numberOfSacks")
-    public Integer getNumberOfSacks() {
-        return numberOfSacks;
+    @PropertyName("trashWeight")
+    public Double getTrashWeight() {
+        return trashWeight;
     }
 
-    @PropertyName("numberOfSacks")
-    public void setNumberOfSacks(Integer numberOfSacks) {
-        this.numberOfSacks = numberOfSacks;
-        
-        // Automatically set truck size based on number of sacks
-        if (numberOfSacks != null) {
-            if (numberOfSacks <= 20) {
-                this.truckSize = "Small";
-            } else if (numberOfSacks <= 50) {
-                this.truckSize = "Medium";
-            } else {
-                this.truckSize = "Large";
-            }
-        }
+    @PropertyName("trashWeight")
+    public void setTrashWeight(Double trashWeight) {
+        this.trashWeight = trashWeight;
     }
     
-    @PropertyName("truckSize")
-    public String getTruckSize() {
-        return truckSize;
+    @PropertyName("isDelivered")
+    public Boolean getIsDelivered() {
+        return isDelivered != null ? isDelivered : false;
     }
 
-    @PropertyName("truckSize")
-    public void setTruckSize(String truckSize) {
-        this.truckSize = truckSize;
+    @PropertyName("isDelivered")
+    public void setIsDelivered(Boolean isDelivered) {
+        this.isDelivered = isDelivered;
+    }
+    
+    @PropertyName("customerConfirmation")
+    public String getCustomerConfirmation() {
+        return customerConfirmation;
+    }
+
+    @PropertyName("customerConfirmation")
+    public void setCustomerConfirmation(String customerConfirmation) {
+        this.customerConfirmation = customerConfirmation;
+    }
+    
+    @PropertyName("driverConfirmation")
+    public String getDriverConfirmation() {
+        return driverConfirmation;
+    }
+
+    @PropertyName("driverConfirmation")
+    public void setDriverConfirmation(String driverConfirmation) {
+        this.driverConfirmation = driverConfirmation;
+    }
+    
+    @PropertyName("serviceRating")
+    public Integer getServiceRating() {
+        return serviceRating;
+    }
+
+    @PropertyName("serviceRating")
+    public void setServiceRating(Integer serviceRating) {
+        this.serviceRating = serviceRating;
     }
 }

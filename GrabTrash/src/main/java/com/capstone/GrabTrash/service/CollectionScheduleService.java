@@ -109,6 +109,51 @@ public class CollectionScheduleService {
         return dto;
     }
 
+    private boolean checkForDuplicateSchedule(CollectionScheduleDTO scheduleDTO) {
+        try {
+            List<QueryDocumentSnapshot> existingSchedules = firestore.collection("collection_schedules")
+                    .whereEqualTo("barangayId", scheduleDTO.getBarangayId())
+                    .whereEqualTo("isActive", true)
+                    .get()
+                    .get()
+                    .getDocuments();
+
+            for (QueryDocumentSnapshot doc : existingSchedules) {
+                CollectionSchedule existingSchedule = doc.toObject(CollectionSchedule.class);
+                
+                if (scheduleDTO.isRecurring() && existingSchedule.isRecurring()) {
+                    // Check for duplicate recurring schedules (same day and time)
+                    if (scheduleDTO.getRecurringDay() != null && 
+                        scheduleDTO.getRecurringDay().equals(existingSchedule.getRecurringDay()) &&
+                        scheduleDTO.getRecurringTime() != null &&
+                        scheduleDTO.getRecurringTime().equals(existingSchedule.getRecurringTime())) {
+                        return true;
+                    }
+                } else if (!scheduleDTO.isRecurring() && !existingSchedule.isRecurring()) {
+                    // Check for duplicate one-time schedules (same date and time)
+                    if (scheduleDTO.getCollectionDateTime() != null && 
+                        existingSchedule.getCollectionDateTime() != null) {
+                        
+                        Timestamp newScheduleTime = parseDateTime(scheduleDTO.getCollectionDateTime());
+                        Timestamp existingScheduleTime = existingSchedule.getCollectionDateTime();
+                        
+                        // Compare timestamps (allowing small time differences due to precision)
+                        long timeDifference = Math.abs(newScheduleTime.getSeconds() - existingScheduleTime.getSeconds());
+                        if (timeDifference < 60) { // Within 1 minute considered duplicate
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            return false;
+        } catch (Exception e) {
+            log.error("Error checking for duplicate schedules: {}", e.getMessage());
+            // In case of error, allow the schedule to be created (fail-safe)
+            return false;
+        }
+    }
+
     public ResponseEntity<?> addSchedule(CollectionScheduleDTO scheduleDTO) {
         try {
             if (!isAdminUser()) {
@@ -126,6 +171,14 @@ public class CollectionScheduleService {
             }
             Barangay barangay = (Barangay) barangayResponse.getBody();
             scheduleDTO.setBarangayName(barangay.getName());
+
+            // Check for duplicate schedules
+            boolean isDuplicate = checkForDuplicateSchedule(scheduleDTO);
+            if (isDuplicate) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "A schedule already exists for this barangay at the same date and time");
+                return ResponseEntity.badRequest().body(error);
+            }
 
             // Convert DTO to model
             CollectionSchedule schedule = convertDTOToModel(scheduleDTO);

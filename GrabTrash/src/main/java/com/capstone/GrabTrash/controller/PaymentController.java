@@ -3,10 +3,17 @@ package com.capstone.GrabTrash.controller;
 import com.capstone.GrabTrash.dto.DashboardStatsDTO;
 import com.capstone.GrabTrash.dto.PaymentRequestDTO;
 import com.capstone.GrabTrash.dto.PaymentResponseDTO;
+import com.capstone.GrabTrash.dto.QuoteRequestDTO;
+import com.capstone.GrabTrash.dto.QuoteResponseDTO;
 import com.capstone.GrabTrash.dto.DriverAssignmentDTO;
+import com.capstone.GrabTrash.dto.DeliveryStatusUpdateDTO;
+import com.capstone.GrabTrash.dto.JobOrderStatusUpdateDTO;
+import com.capstone.GrabTrash.dto.ImageConfirmationDTO;
+import com.capstone.GrabTrash.dto.ServiceRatingUpdateDTO;
 import com.capstone.GrabTrash.service.PaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,6 +32,19 @@ public class PaymentController {
     @Autowired
     public PaymentController(PaymentService paymentService) {
         this.paymentService = paymentService;
+    }
+
+    /**
+     * Generate a quote with automated truck and driver assignment
+     * This endpoint provides pricing estimation and assignment details without creating a payment record
+     * Requires JWT authentication in the Authorization header
+     * @param quoteRequest Quote request information
+     * @return Quote with pricing and assignment details
+     */
+    @PostMapping("/quote")
+    public ResponseEntity<QuoteResponseDTO> generateQuote(@RequestBody QuoteRequestDTO quoteRequest) {
+        QuoteResponseDTO response = paymentService.generateQuote(quoteRequest);
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -128,5 +148,88 @@ public class PaymentController {
     public ResponseEntity<List<PaymentResponseDTO>> getPaymentsByDriverId(@PathVariable String driverId) {
         List<PaymentResponseDTO> payments = paymentService.getPaymentsByDriverId(driverId);
         return ResponseEntity.ok(payments);
+    }
+
+    /**
+     * Update the delivery status of a payment
+     * Requires JWT authentication with admin or driver role
+     * @param paymentId Payment ID
+     * @param updateRequest Delivery status update request
+     * @return Updated payment response
+     */
+    @PutMapping("/{paymentId}/delivery-status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER')")
+    public ResponseEntity<PaymentResponseDTO> updateDeliveryStatus(
+            @PathVariable String paymentId,
+            @RequestBody DeliveryStatusUpdateDTO updateRequest) {
+        
+        PaymentResponseDTO updatedPayment = paymentService.updateDeliveryStatus(
+                paymentId, 
+                updateRequest.getIsDelivered());
+        
+        return ResponseEntity.ok(updatedPayment);
+    }
+
+    /**
+     * Update the job order status of a payment by customer or driver
+     * Requires JWT authentication with customer or driver role
+     * Customers can only update their own payments, drivers can only update assigned payments
+     * @param paymentId Payment ID
+     * @param updateRequest Job order status update request
+     * @return Updated payment response
+     */
+    @PutMapping("/{paymentId}/job-order-status")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'DRIVER')")
+    public ResponseEntity<PaymentResponseDTO> updateJobOrderStatus(
+            @PathVariable String paymentId,
+            @RequestBody JobOrderStatusUpdateDTO updateRequest) {
+        
+        PaymentResponseDTO updatedPayment = paymentService.updateJobOrderStatusByRole(
+                paymentId, 
+                updateRequest.getJobOrderStatus());
+        
+        return ResponseEntity.ok(updatedPayment);
+    }
+
+    /**
+     * Upload image confirmation proof for job status
+     * Allows both customers and drivers to upload confirmation images
+     * Requires JWT authentication with customer or driver role
+     * @param paymentId Payment ID
+     * @param imageRequest Image confirmation request
+     * @return Updated payment response
+     */
+    @PostMapping("/{paymentId}/confirmation-image")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'DRIVER')")
+    public ResponseEntity<PaymentResponseDTO> uploadConfirmationImage(
+            @PathVariable String paymentId,
+            @RequestBody ImageConfirmationDTO imageRequest) {
+        
+        PaymentResponseDTO updatedPayment = paymentService.uploadConfirmationImage(
+                paymentId, 
+                imageRequest.getImageUrl());
+        
+        return ResponseEntity.ok(updatedPayment);
+    }
+
+    /**
+     * Update service rating for an order/payment
+     * Only the customer who owns the order can update the rating
+     * Requires JWT authentication with customer role
+     * @param orderId Order ID to identify the payment
+     * @param ratingRequest Service rating update request
+     * @return Updated payment response
+     */
+    @PutMapping("/order/{orderId}/rating")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<PaymentResponseDTO> updateServiceRating(
+            @PathVariable String orderId,
+            @RequestBody ServiceRatingUpdateDTO ratingRequest) {
+        
+        PaymentResponseDTO updatedPayment = paymentService.updateServiceRating(
+                orderId, 
+                ratingRequest.getServiceRating());
+        
+        return ResponseEntity.ok(updatedPayment);
     }
 }

@@ -6,29 +6,21 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Data Transfer Object for payment requests
- * This class is used to receive payment information from the mobile app
+ * Data Transfer Object for quote/estimation requests
+ * This class is used to receive information for price estimation and truck assignment
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PaymentRequestDTO {
-    private String orderId;
-    private String customerName;
+public class QuoteRequestDTO {
     private String customerEmail;
     private String address;
     private Double latitude;
     private Double longitude;
-    private Double amount;
-    private Double totalAmount;
-    private String paymentMethod;
-    private String paymentReference;
-    private String notes;
     private String barangayId;
     private String phoneNumber;   // Customer phone number
     private String wasteType;     // Type of waste (e.g., RECYCLABLE, NON_RECYCLABLE, HAZARDOUS)
     private Double trashWeight;   // Weight of trash in kilograms
-    private String truckId;       // ID of the selected truck
-    private String quoteId;       // Optional: Reference to the quote that generated this payment
+    private String notes;         // Additional notes or special instructions
 }
