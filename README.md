@@ -93,22 +93,24 @@ A robust backend REST API for the **GrabTrash** waste management and collection 
 
 ## 🏗 Architecture
 
-The application follows a layered architecture pattern:
-┌─────────────────────────────────────────────────────────┐
-│ Controllers │
-│ (REST API endpoints - Handle HTTP requests/responses) │
-├─────────────────────────────────────────────────────────┤
-│ Services │
-│ (Business logic and orchestration) │
-├─────────────────────────────────────────────────────────┤
-│ Models │
-│ (Data entities and DTOs) │
-├─────────────────────────────────────────────────────────┤
-│ Firebase/Firestore │
-│ (Data persistence) │
-└─────────────────────────────────────────────────────────┘
+The application follows a standard layered architecture pattern:
 
+```mermaid
+graph TD;
+    A[Client Request] --> B(Controllers);
+    B --> C{Services};
+    C --> D[Models / DTOs];
+    C --> E[(Firebase Firestore)];
+    C --> F((Firebase Cloud Messaging));
+```
+Controllers: REST API endpoints handling HTTP requests/responses.
 
+  1. Services: Business logic, validation, and orchestration.
+  
+  2. Models: Data entities and Data Transfer Objects (DTOs).
+  
+  3. Firebase: Data persistence and cloud messaging.
+     
 ---
 
 ## 📦 Prerequisites
