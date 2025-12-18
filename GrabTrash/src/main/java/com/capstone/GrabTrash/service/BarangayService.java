@@ -120,7 +120,7 @@ public class BarangayService {
     public ResponseEntity<?> getAllBarangays() {
         try {
             List<QueryDocumentSnapshot> documents = firestore.collection("barangays")
-                    .whereEqualTo("isActive", true)
+                    
                     .get()
                     .get()
                     .getDocuments();
